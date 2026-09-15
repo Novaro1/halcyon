@@ -204,6 +204,29 @@ the [Scramjet releases page](https://github.com/MercuryWorkshop/scramjet/release
 and `npm install`. The controller and core must be from the **same** build — the
 controller asserts a matching `$scramjet.versionInfo.version` at runtime.
 
+## Contributing
+
+Contributions are welcome — issues and pull requests both.
+
+- **Bugs / ideas:** open an [issue](https://github.com/Novaro1/halcyon/issues).
+  For a site that renders wrong, include the site, what you saw, and the browser
+  console output (that's usually where the real cause is). Note that some
+  breakage is *upstream* — Scramjet's rewriter or the libcurl transport — rather
+  than Halcyon itself; see **Known-incompatible sites** above.
+- **Setup:** `npm install`, then `npm start` — there's **no build step**, so a
+  change to anything in `public/` is live on the next reload (hard-reload, or use
+  Settings → *Wipe session data*, to pick up a changed `public/sw.js`).
+- **Pull requests:** keep them focused, match the surrounding style (plain ES
+  modules, no framework, the existing comment density), and run `node --check` on
+  any file you touch. If you add a runtime feature, say how you verified it —
+  ideally a small Node harness or the exact in-proxy steps, since the service
+  worker makes automated end-to-end testing awkward.
+- **Blocklist changes:** only domain / hosts / `||domain^` lists are drop-in (the
+  service worker is DNS-style, with no cosmetic-filter engine); uBlock/AdGuard
+  `##`-selector rules can't be used.
+- **License:** by contributing you agree your changes are released under the
+  project's **AGPL-3.0** license (below).
+
 ## License
 
 Halcyon is licensed under the **GNU Affero General Public License v3.0**
