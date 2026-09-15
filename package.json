@@ -6,7 +6,18 @@
   "scripts": {
     "start": "node server.js"
   },
-  "keywords": [],
+  "keywords": [
+    "web-proxy",
+    "proxy",
+    "scramjet",
+    "wisp",
+    "libcurl",
+    "service-worker",
+    "adblock",
+    "privacy",
+    "self-hosted",
+    "nodejs"
+  ],
   "author": "Novaro1",
   "license": "AGPL-3.0-only",
   "type": "module",
