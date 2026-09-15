@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>Halcyon</title>
+    <link rel="icon" href="/assets/icon.svg" />
+    <link
+      rel="preconnect"
+      href="https://fonts.gstatic.com"
+      crossorigin
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,900;1,9..144,500&family=Hanken+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <!-- Living background -->
+    <canvas id="stars"></canvas>
+    <div class="aurora" aria-hidden="true">
+      <span class="blob b1"></span>
+      <span class="blob b2"></span>
+      <span class="blob b3"></span>
+    </div>
+    <div class="grain" aria-hidden="true"></div>
+
+    <div id="app">
+      <!-- Floating dock -->
+      <aside class="dock">
+        <button class="orb-mark" data-nav="home" title="Halcyon">
+          <span class="orb"></span>
+        </button>
+        <nav class="nav">
+          <button class="nav-btn active" data-nav="home" title="Home">
+            <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
+            <span class="tip">Home</span>
+          </button>
+          <button class="nav-btn" data-nav="apps" title="Apps">
+            <svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg>
+            <span class="tip">Apps</span>
+          </button>
+          <button class="nav-btn" data-nav="settings" title="Settings">
+            <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.03-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+            <span class="tip">Settings</span>
+          </button>
+        </nav>
+        <div class="nav-spacer"></div>
+        <button class="nav-btn" id="theme-btn" title="Toggle day / night">
+          <svg class="ic-sun" viewBox="0 0 24 24"><path d="M12 17a5 5 0 100-10 5 5 0 000 10zm0-14v3m0 16v-3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>
+          <svg class="ic-moon" viewBox="0 0 24 24"><path d="M21 12.8A8.5 8.5 0 1111.2 3a6.5 6.5 0 009.8 9.8z"/></svg>
+          <span class="tip">Day / Night</span>
+        </button>
+        <button class="nav-btn danger" id="panic-btn" title="Panic — tap Esc twice">
+          <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 15h-2v-2h2zm0-4h-2V7h2z"/></svg>
+          <span class="tip">Panic</span>
+        </button>
+      </aside>
+
+      <main class="main">
+        <!-- HOME -->
+        <section class="view active" data-view="home">
+          <div class="hero">
+            <p class="greeting" id="greeting"></p>
+            <div class="logo-line">
+              <span class="hero-orb"><span class="orb"></span></span>
+              <h1 class="wordmark">Halcyon</h1>
+            </div>
+            <p class="tagline">A calm window on the open web.</p>
+
+            <form id="search-form" class="omni">
+              <svg class="omni-icon" viewBox="0 0 24 24"><path d="M10 2a8 8 0 105.3 14l5.4 5.4 1.4-1.4-5.4-5.4A8 8 0 0010 2zm0 2a6 6 0 110 12 6 6 0 010-12z"/></svg>
+              <input
+                id="search-input"
+                type="text"
+                autocomplete="off"
+                autocapitalize="off"
+                spellcheck="false"
+                placeholder="Search the web, or paste a link"
+              />
+              <button type="submit" class="omni-go">
+                <span>Enter</span>
+                <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+              </button>
+            </form>
+
+            <div class="ql-label">Jump back in</div>
+            <div class="quicklinks" id="quicklinks"></div>
+          </div>
+        </section>
+
+        <!-- APPS -->
+        <section class="view" data-view="apps">
+          <header class="view-head">
+            <h2>Explore</h2>
+            <p>Your favorite corners of the web, one tap away.</p>
+          </header>
+          <div class="grid" id="apps-grid"></div>
+        </section>
+
+        <!-- SETTINGS -->
+        <section class="view" data-view="settings">
+          <header class="view-head">
+            <h2>Settings</h2>
+            <p>Everything lives in your browser — nothing is sent anywhere.</p>
+          </header>
+          <div class="settings">
+            <div class="set-card">
+              <label class="field">
+                <span class="field-label">Search engine</span>
+                <div class="select-wrap">
+                  <select id="set-engine">
+                    <option value="https://www.google.com/search?q=%s">Google</option>
+                    <option value="https://duckduckgo.com/?q=%s">DuckDuckGo</option>
+                    <option value="https://www.bing.com/search?q=%s">Bing</option>
+                    <option value="https://search.brave.com/search?q=%s">Brave</option>
+                  </select>
+                </div>
+              </label>
+            </div>
+
+            <div class="set-card">
+              <label class="field toggle-field">
+                <div>
+                  <span class="field-label">Block ads &amp; trackers</span>
+                  <span class="field-hint">
+                    Drops requests to known ad &amp; analytics domains before they leave the tunnel.
+                    <span id="adblock-count"></span>
+                  </span>
+                </div>
+                <span class="switch">
+                  <input id="set-adblock" type="checkbox" />
+                  <span class="track"></span>
+                </span>
+              </label>
+            </div>
+
+            <div class="set-card">
+              <label class="field toggle-field">
+                <div>
+                  <span class="field-label">Block AI content farms</span>
+                  <span class="field-hint">
+                    Blocks known AI "slop" content-farm sites (alvi-se's list). Opinionated —
+                    turn off if it ever hides a site you wanted.
+                  </span>
+                </div>
+                <span class="switch">
+                  <input id="set-aiblock" type="checkbox" />
+                  <span class="track"></span>
+                </span>
+              </label>
+            </div>
+
+            <div class="set-card">
+              <label class="field toggle-field">
+                <div>
+                  <span class="field-label">Hide Discord upsells</span>
+                  <span class="field-hint">
+                    Hides Discord's Nitro/boost upsells, store &amp; gift buttons and promo
+                    banners via Disblock-Origin's stylesheet (fetched live). Cosmetic only.
+                  </span>
+                </div>
+                <span class="switch">
+                  <input id="set-discordblock" type="checkbox" />
+                  <span class="track"></span>
+                </span>
+              </label>
+            </div>
+
+            <div class="set-card">
+              <label class="field toggle-field">
+                <div>
+                  <span class="field-label">Block pop-ups</span>
+                  <span class="field-hint">
+                    Stops pop-ups, pop-unders and tab-redirect ads (window.open not
+                    tied to a click). Popups you actually click — logins, "open in
+                    new tab" — still work.
+                  </span>
+                </div>
+                <span class="switch">
+                  <input id="set-popupblock" type="checkbox" />
+                  <span class="track"></span>
+                </span>
+              </label>
+            </div>
+
+            <div class="set-card">
+              <label class="field toggle-field">
+                <div>
+                  <span class="field-label">Clean tracking links</span>
+                  <span class="field-hint">
+                    Strips tracking params (utm_*, fbclid, gclid…) from links you open,
+                    using DandelionSprout's LegitimateURLShortener list. Loads the clean
+                    URL and shows it clean in the address bar.
+                  </span>
+                </div>
+                <span class="switch">
+                  <input id="set-cleanurls" type="checkbox" />
+                  <span class="track"></span>
+                </span>
+              </label>
+            </div>
+
+            <div class="set-card">
+              <label class="field">
+                <span class="field-label">Wisp server</span>
+                <input id="set-wisp" type="text" placeholder="wss://this-site/wisp/" />
+                <span class="field-hint">Leave blank to use this site's own server.</span>
+              </label>
+            </div>
+
+            <div class="set-card">
+              <div class="field">
+                <span class="field-label">Tab cloak</span>
+                <input id="set-cloak-title" type="text" placeholder="Tab title (e.g. Google Classroom)" />
+                <span class="field-hint">Disguises this tab's title &amp; icon. Blank = Halcyon.</span>
+              </div>
+            </div>
+
+            <div class="set-card">
+              <label class="field toggle-field">
+                <div>
+                  <span class="field-label">Open in about:blank</span>
+                  <span class="field-hint">Relaunch this site inside an about:blank shell.</span>
+                </div>
+                <span class="switch">
+                  <input id="set-aboutblank" type="checkbox" />
+                  <span class="track"></span>
+                </span>
+              </label>
+            </div>
+
+            <div class="set-card">
+              <div class="field">
+                <span class="field-label">Panic key</span>
+                <input id="set-panic-url" type="text" placeholder="https://classroom.google.com" />
+                <span class="field-hint">Press <kbd>Esc</kbd> twice to jump here instantly.</span>
+              </div>
+            </div>
+
+            <div class="set-card">
+              <div class="field">
+                <span class="field-label">Session &amp; privacy</span>
+                <span class="field-hint">
+                  Traffic is end-to-end encrypted — the server relays your requests but can't read
+                  the contents of HTTPS sites. Logins live only in this browser. Wiping signs you out
+                  of every proxied site and clears all traces from this device.
+                </span>
+                <button id="wipe-btn" class="wipe-btn" type="button">Wipe session data</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- PROXY VIEW -->
+        <section class="view proxy" data-view="proxy">
+          <div class="topbar">
+            <button class="tb-btn" id="tb-back" title="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+            <button class="tb-btn" id="tb-forward" title="Forward"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+            <button class="tb-btn" id="tb-reload" title="Reload"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 10-2 6m2 2v-5h-5"/></svg></button>
+            <form id="tb-form" class="tb-omni">
+              <span class="tb-lock"><svg viewBox="0 0 24 24"><path d="M6 10V8a6 6 0 1112 0v2m-13 0h14v10H5z"/></svg></span>
+              <input id="tb-input" type="text" autocomplete="off" spellcheck="false" />
+            </form>
+            <button class="tb-btn" id="tb-overlay" title="Remove overlay (dismiss modal + restore scroll)"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+            <button class="tb-btn" id="tb-newtab" title="Open in new tab"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></svg></button>
+            <button class="tb-btn" id="tb-home" title="Home"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/></svg></button>
+          </div>
+          <div class="frame-wrap">
+            <iframe id="frame" title="Halcyon"></iframe>
+            <div class="frame-loader" id="frame-loader">
+              <span class="load-orb"><span class="orb"></span></span>
+              <p class="load-text">Weaving the connection…</p>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/proxy.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>
