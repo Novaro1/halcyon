@@ -203,3 +203,14 @@ To pull a newer build later, re-point those two URLs at the newest tarballs on
 the [Scramjet releases page](https://github.com/MercuryWorkshop/scramjet/releases)
 and `npm install`. The controller and core must be from the **same** build — the
 controller asserts a matching `$scramjet.versionInfo.version` at runtime.
+
+## License
+
+Halcyon is licensed under the **GNU Affero General Public License v3.0**
+(AGPL-3.0) — see [`LICENSE`](LICENSE). This matches its core dependencies
+([Scramjet](https://github.com/MercuryWorkshop/scramjet) and the libcurl
+transport, both AGPL-3.0): the copyleft carries through, so if you run a modified
+Halcyon as a network service you must make your source available to its users.
+
+© Novaro1. Bundled third-party components (Scramjet, Wisp, the libcurl transport,
+and the block/allow lists) remain under their own licenses and copyrights.

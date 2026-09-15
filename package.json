@@ -1,14 +1,14 @@
 {
   "name": "halcyon",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Self-hosted web proxy on Scramjet 2.x + Wisp + libcurl, with a built-in ad/tracker/malware blocker.",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Novaro1",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "dependencies": {
     "@mercuryworkshop/libcurl-transport": "^2.0.5",
