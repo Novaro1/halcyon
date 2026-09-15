@@ -21,6 +21,13 @@
   "author": "Novaro1",
   "license": "AGPL-3.0-only",
   "homepage": "https://github.com/Novaro1/halcyon#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Novaro1/halcyon.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Novaro1/halcyon/issues"
+  },
   "type": "module",
   "dependencies": {
     "@mercuryworkshop/libcurl-transport": "^2.0.5",
