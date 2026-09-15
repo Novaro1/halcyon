@@ -9,6 +9,8 @@ It lets you browse any site through your own server: the page is fetched by the
 Wisp tunnel and rewritten client-side by Scramjet inside a service worker, so it
 renders under your origin.
 
+Source: [github.com/Novaro1/halcyon](https://github.com/Novaro1/halcyon).
+
 ## Features
 
 - **Scramjet 2.x engine** — the current controller/frame architecture, not the
