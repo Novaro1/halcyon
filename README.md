@@ -206,7 +206,8 @@ controller asserts a matching `$scramjet.versionInfo.version` at runtime.
 
 ## Contributing
 
-Contributions are welcome — issues and pull requests both.
+Contributions are welcome — issues and pull requests both. By participating you
+agree to abide by the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 - **Bugs / ideas:** open an [issue](https://github.com/Novaro1/halcyon/issues).
   For a site that renders wrong, include the site, what you saw, and the browser
