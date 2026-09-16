@@ -122,6 +122,19 @@ Environment:
   AI-farm list, and URL-cleaner (see Features). `HALCYON_BLOCKLIST_URL` accepts a
   comma-separated list.
 
+**Abuse guardrails** (for public exposure; sensible defaults, all env-tunable):
+
+- `HALCYON_ALLOWED_PORTS` — destination ports the tunnel may reach (default
+  `80,443` — a *web* proxy, not a general TCP relay to SMTP/SSH/DBs/etc.).
+- `HALCYON_DENY_HOSTS` — comma-separated **regex** sources appended to the
+  built-in SSRF/infra denylist (localhost, private-IP literals, cloud metadata,
+  `*.internal`/`*.local`, `*.fly.dev`). UDP relaying is off entirely.
+- `HALCYON_RL_HTTP` / `HALCYON_RL_LOGIN` / `HALCYON_RL_WISP` — per-IP request /
+  login-attempt / new-tunnel limits per minute (defaults `600` / `20` / `300`).
+- `HALCYON_MAX_CONN` — max concurrent tunnels per IP (default `128`). Real client
+  IP is read from `CF-Connecting-IP` / `Fly-Client-IP` / `X-Forwarded-For` when
+  fronted. Limits are generous by design — a shared school NAT is the audience.
+
 ```bash
 HALCYON_PASSWORD='something-long' HOST=0.0.0.0 npm start
 ```
@@ -165,6 +178,14 @@ HALCYON_PASSWORD='something-long' HOST=0.0.0.0 npm start
   context, and only HTTPS/`wss://` hides the connection metadata from your local
   network. Put it behind Caddy or a Cloudflare Tunnel for TLS — don't expose
   plain `http`.
+- **Put Cloudflare in front before going public.** The built-in guardrails
+  (above) stop the proxy being weaponized, but a public instance still wants an
+  edge in front for DDoS/bot protection and to cache the static shell + runtime.
+  Proxy the domain through Cloudflare (orange-cloud), leave **WebSockets on** (so
+  `/wisp/` keeps working), and the server already reads `CF-Connecting-IP` so the
+  per-IP limits see real client IPs. Expect a **disposable-mirror** posture: a
+  public unblocker gets blocked and occasionally killed by hosts — run several,
+  and treat any single domain as replaceable.
 
 ## Known-incompatible sites
 

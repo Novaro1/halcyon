@@ -34,13 +34,103 @@ const DNS_SERVERS = (process.env.HALCYON_DNS || "1.1.1.1,1.0.0.1")
   .map((s) => s.trim())
   .filter(Boolean);
 logging.set_level(logging.WARN);
+
+// ---- Abuse guardrails (for public exposure) -------------------------------
+// A public proxy makes every connection from THIS server's IP, so it must not
+// be usable to (a) reach the host's own infra/cloud-metadata (SSRF), or (b) act
+// as a general TCP/UDP relay to attack/spam arbitrary services. These options
+// keep it a *web* proxy only. All are env-tunable so a self-hoster can loosen
+// or tighten them.
+
+// Destination ports the tunnel may reach — web only by default (not a generic
+// TCP relay to SMTP:25 spam, SSH, databases, game servers, …).
+const ALLOWED_PORTS = (process.env.HALCYON_ALLOWED_PORTS || "80,443")
+  .split(",")
+  .map((s) => parseInt(s.trim(), 10))
+  .filter((n) => n > 0 && n < 65536);
+
+// Hostname denylist (regex, tested against the destination host). Blocks
+// localhost/loopback, private-IP literals, cloud metadata, mDNS/.internal, and
+// this host's own Fly infra — SSRF defense in depth on top of allow_private_ips.
+const DENY_HOSTS = [
+  /^localhost$/i,
+  /(^|\.)internal$/i, // *.internal (Fly, k8s, cloud)
+  /(^|\.)local$/i, //     mDNS .local
+  /(^|\.)fly\.dev$/i, //   our own app + Fly edge
+  /^metadata\.google\.internal$/i,
+  /^169\.254\./, //        link-local incl. 169.254.169.254 cloud metadata
+  /^127\./,
+  /^10\./,
+  /^192\.168\./,
+  /^172\.(1[6-9]|2\d|3[01])\./, // 172.16-31
+  /^0\./,
+  /^::1$/,
+  /^fe80:/i, //            v6 link-local
+  /^f[cd][0-9a-f]{2}:/i, // v6 ULA (incl. Fly 6PN fdaa:)
+];
+// Operator extras: HALCYON_DENY_HOSTS = comma-separated regex sources.
+(process.env.HALCYON_DENY_HOSTS || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean)
+  .forEach((s) => {
+    try {
+      DENY_HOSTS.push(new RegExp(s, "i"));
+    } catch {}
+  });
+
 Object.assign(wisp.options, {
   allow_private_ips: false,
   allow_loopback_ips: false,
+  allow_udp_streams: false, // web is TCP; no UDP relay (DNS amp / QUIC abuse)
   dns_method: "resolve",
   dns_servers: DNS_SERVERS,
   dns_result_order: "ipv4first",
+  hostname_blacklist: DENY_HOSTS,
+  port_whitelist: ALLOWED_PORTS,
 });
+
+// ---- Per-IP rate limiting + connection caps -------------------------------
+// The real client IP comes from Cloudflare / Fly headers when fronted, else the
+// socket. NOTE: shared NATs (a whole school behind one IP) are the target
+// audience, so ceilings are deliberately generous — they stop a runaway
+// script/abuser, not a classroom. Login is the exception (brute-force).
+function clientIp(req) {
+  return (
+    req.headers["cf-connecting-ip"] ||
+    req.headers["fly-client-ip"] ||
+    (req.headers["x-forwarded-for"] || "").split(",")[0].trim() ||
+    (req.socket && req.socket.remoteAddress) ||
+    "?"
+  );
+}
+function makeLimiter(max, windowMs) {
+  const hits = new Map(); // ip -> { n, reset }
+  const timer = setInterval(() => {
+    const now = Date.now();
+    for (const [ip, v] of hits) if (v.reset <= now) hits.delete(ip);
+  }, windowMs);
+  timer.unref && timer.unref();
+  return (ip) => {
+    const now = Date.now();
+    let v = hits.get(ip);
+    if (!v || v.reset <= now) {
+      v = { n: 0, reset: now + windowMs };
+      hits.set(ip, v);
+    }
+    v.n++;
+    return v.n <= max;
+  };
+}
+const num = (env, d) => {
+  const n = parseInt(process.env[env], 10);
+  return Number.isFinite(n) && n > 0 ? n : d;
+};
+const httpLimiter = makeLimiter(num("HALCYON_RL_HTTP", 600), 60_000); // req/min/IP
+const loginLimiter = makeLimiter(num("HALCYON_RL_LOGIN", 20), 60_000); // strict
+const wispLimiter = makeLimiter(num("HALCYON_RL_WISP", 300), 60_000); // upgrades/min/IP
+const MAX_WISP_CONCURRENT = num("HALCYON_MAX_CONN", 128); // concurrent tunnels/IP
+const wispConns = new Map(); // ip -> live connection count
 
 // ---- Resolve the scramjet runtime files out of node_modules ---------------
 const scramjetDist = require("@mercuryworkshop/scramjet/path").scramjetPath;
@@ -442,11 +532,23 @@ const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host}`);
     let path = decodeURIComponent(url.pathname);
+    const ip = clientIp(req);
+
+    // General per-IP request ceiling (stops runaway scripts; generous for NATs).
+    if (!httpLimiter(ip)) {
+      res.writeHead(429, { "Content-Type": "text/plain", "Retry-After": "60" });
+      return res.end("Too many requests — slow down.");
+    }
 
     // ---- Access gate ----
     if (AUTH_TOKEN) {
       if (path === "/login") {
         if (req.method === "POST") {
+          // Strict limit on login attempts — brute-force defense.
+          if (!loginLimiter(ip)) {
+            res.writeHead(429, { "Content-Type": "text/plain", "Retry-After": "60" });
+            return res.end("Too many attempts — wait a minute.");
+          }
           const body = await readBody(req);
           const pw = new URLSearchParams(body).get("password") || "";
           const ok =
@@ -566,17 +668,35 @@ server.on("upgrade", (req, socket, head) => {
     socket.destroy();
     return;
   }
-  if (req.url.endsWith("/wisp/")) {
-    wisp.routeRequest(req, socket, head);
-  } else {
+  if (!req.url.endsWith("/wisp/")) {
     socket.end();
+    return;
   }
+  // Per-IP tunnel guardrails: new-connection rate + concurrent-connection cap,
+  // so one client can't open unbounded tunnels (egress blow-up / DoS).
+  const ip = clientIp(req);
+  if (!wispLimiter(ip) || (wispConns.get(ip) || 0) >= MAX_WISP_CONCURRENT) {
+    socket.write("HTTP/1.1 429 Too Many Requests\r\n\r\n");
+    socket.destroy();
+    return;
+  }
+  wispConns.set(ip, (wispConns.get(ip) || 0) + 1);
+  socket.on("close", () => {
+    const n = (wispConns.get(ip) || 1) - 1;
+    if (n <= 0) wispConns.delete(ip);
+    else wispConns.set(ip, n);
+  });
+  wisp.routeRequest(req, socket, head);
 });
 
 server.listen(PORT, HOST, () => {
   console.log(`\n  Halcyon → http://localhost:${PORT}  (bound to ${HOST})`);
   console.log(`  Transport: end-to-end encrypted (libcurl). Relay sees no plaintext.`);
   console.log(`  DNS resolver: ${DNS_SERVERS.join(", ")}`);
+  console.log(
+    `  Guardrails: ports ${ALLOWED_PORTS.join("/")}, UDP off, ` +
+      `${DENY_HOSTS.length} host denies; ≤${MAX_WISP_CONCURRENT} tunnels/IP + rate limits.`
+  );
   if (AUTH_TOKEN) {
     console.log(`  Access gate: ON (passphrase required).`);
   } else if (HOST !== "127.0.0.1" && HOST !== "localhost") {
