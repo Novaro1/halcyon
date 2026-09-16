@@ -245,12 +245,65 @@
   }
 
   let controllerPromise = null;
-  let frame = null;
-  let activeFrameWin = null; // the current top-level proxied window (for overlay removal)
-  const listeners = new Set();
-  const emit = (url) => {
-    listeners.forEach((fn) => fn(url));
+
+  // ---- Tabs -----------------------------------------------------------------
+  // Each tab is its own Scramjet frame + <iframe>, all sharing the single
+  // controller / transport / service worker. Tab state lives here; app.js
+  // renders it and drives switch / close / new.
+  let framesContainer = null; // where per-tab iframes mount (set by app.js)
+  const tabs = new Map(); // id -> { id, frame, iframe, win, url, title, loading }
+  let activeTabId = null;
+  let tabSeq = 0;
+  const tabListeners = new Set();
+
+  const snapshot = () => ({
+    activeId: activeTabId,
+    tabs: [...tabs.values()].map((t) => ({
+      id: t.id,
+      url: t.url,
+      title: t.title,
+      loading: t.loading,
+      active: t.id === activeTabId,
+    })),
+  });
+  const notifyTabs = () => {
+    const s = snapshot();
+    tabListeners.forEach((fn) => fn(s));
   };
+
+  // Only the active tab's iframe is shown; the rest stay mounted (so their
+  // pages keep their state) but display:none.
+  function showActiveIframe() {
+    for (const t of tabs.values())
+      if (t.iframe) t.iframe.style.display = t.id === activeTabId ? "block" : "none";
+  }
+
+  // Prefer the proxied page's own <title> (same-origin, so readable); fall back
+  // to the hostname.
+  function setTabTitle(tab) {
+    let t = "";
+    try {
+      t = (tab.win && tab.win.document && tab.win.document.title) || "";
+    } catch {}
+    if (!t) {
+      try {
+        t = new URL(tab.url).hostname.replace(/^www\./, "");
+      } catch {
+        t = tab.url || "New Tab";
+      }
+    }
+    tab.title = t;
+  }
+
+  function createTab() {
+    const id = ++tabSeq;
+    const tab = { id, frame: null, iframe: null, win: null, url: "", title: "New Tab", loading: false };
+    tabs.set(id, tab);
+    activeTabId = id;
+    showActiveIframe();
+    notifyTabs();
+    return tab;
+  }
 
   async function boot() {
     if (controllerPromise) return controllerPromise;
@@ -283,23 +336,42 @@
         halcyonAiblock: localStorage.getItem("halcyon:aiblock") !== "0",
       });
 
-      // Report the real (unproxied) URL of the framed page as it navigates.
+      // Per-tab watcher: reports the real (unproxied) URL as the tab navigates
+      // and keeps the tab's window + title in sync. Bound to a tab id so each
+      // frame updates its own tab.
       class UrlWatcher extends ManagedPlugin {
-        constructor() {
-          super("halcyon-url-watcher", []);
+        constructor(tabId) {
+          super("halcyon-url-watcher-" + tabId, []);
+          this.tabId = tabId;
         }
         install(f) {
           this.tap(f.hooks.init.post, (ctx) => {
             // Popup blocking applies to every frame, incl. ad subframes.
             installPopupBlocker(ctx.window);
             if (!ctx.isTopLevel) return;
-            activeFrameWin = ctx.window; // target for on-demand overlay removal
-            const notify = () => emit(ctx.client.url.href);
-            notify();
+            const tab = tabs.get(this.tabId);
+            if (!tab) return;
+            tab.win = ctx.window; // target for on-demand overlay removal
+            const setUrl = (url) => {
+              tab.url = url;
+              tab.loading = false;
+              setTabTitle(tab);
+              notifyTabs();
+              // Pages that set <title> after load — re-read shortly after.
+              setTimeout(() => {
+                setTabTitle(tab);
+                notifyTabs();
+              }, 900);
+            };
+            setUrl(ctx.client.url.href);
             this.tap(ctx.client.hooks.lifecycle.navigate, (_c, props) =>
-              emit(props.url)
+              setUrl(props.url)
             );
-            ctx.window.addEventListener("hashchange", notify, { capture: true });
+            ctx.window.addEventListener(
+              "hashchange",
+              () => setUrl(ctx.client.url.href),
+              { capture: true }
+            );
             // Use the *real* URL (ctx.client.url), not ctx.window.location —
             // cross-realm the latter reads the proxy host, not discord.com.
             const href = (ctx.client && ctx.client.url && ctx.client.url.href) || "";
@@ -333,40 +405,96 @@
   }
 
   const Halcyon = {
-    /** Mount the proxy into an <iframe>, navigating to `input` (URL or search). */
-    async go(input, iframeEl) {
+    /** Give the runtime the container element where tab <iframe>s are mounted. */
+    initTabs(container) {
+      framesContainer = container;
+    },
+    /** Open a NEW tab, optionally navigating it. Returns the new tab id. */
+    async newTab(input) {
+      const tab = createTab();
+      if (input != null && String(input).trim()) await this.go(input, tab.id);
+      return tab.id;
+    },
+    /** Navigate a tab (the active one by default) to `input` (URL or search). */
+    async go(input, tabId) {
       const url = normalizeInput(input);
       if (!url) return null;
       const { controller, UrlWatcher } = await boot();
-      if (!frame) {
-        frame = controller.createFrame(iframeEl, { plugins: [new UrlWatcher()] });
+      let tab = tabId ? tabs.get(tabId) : tabs.get(activeTabId);
+      if (!tab) tab = createTab();
+      // Lazily create the frame + iframe on first navigation.
+      if (!tab.frame) {
+        tab.iframe = document.createElement("iframe");
+        tab.iframe.className = "frame";
+        tab.iframe.title = "Halcyon";
+        framesContainer.appendChild(tab.iframe);
+        tab.frame = controller.createFrame(tab.iframe, {
+          plugins: [new UrlWatcher(tab.id)],
+        });
+        showActiveIframe();
       }
-      frame.go(url);
+      tab.loading = true;
+      tab.url = url;
+      setTabTitle(tab);
+      notifyTabs();
+      tab.frame.go(url);
       return url;
     },
+    /** Make `id` the active tab. */
+    switchTab(id) {
+      if (!tabs.has(id)) return;
+      activeTabId = id;
+      showActiveIframe();
+      notifyTabs();
+    },
+    /** Close a tab and free its frame. */
+    closeTab(id) {
+      const tab = tabs.get(id);
+      if (!tab) return;
+      try {
+        tab.frame?.destroy?.();
+      } catch {}
+      if (tab.iframe) tab.iframe.remove();
+      tabs.delete(id);
+      if (activeTabId === id) {
+        const rest = [...tabs.keys()];
+        activeTabId = rest.length ? rest[rest.length - 1] : null;
+      }
+      showActiveIframe();
+      notifyTabs();
+    },
+    /** Subscribe to tab-state changes; fires immediately with current state. */
+    onTabs(fn) {
+      tabListeners.add(fn);
+      fn(snapshot());
+      return () => tabListeners.delete(fn);
+    },
+    /** Current tab-state snapshot. */
+    tabsState: snapshot,
     back() {
-      frame?.back();
+      tabs.get(activeTabId)?.frame?.back();
     },
     forward() {
-      frame?.forward();
+      tabs.get(activeTabId)?.frame?.forward();
     },
     reload() {
-      frame?.reload();
+      const t = tabs.get(activeTabId);
+      if (t?.frame) {
+        t.loading = true;
+        notifyTabs();
+        t.frame.reload();
+      }
     },
-    /** Remove modal overlays + restore scroll in the current page. Returns count. */
+    /** Remove modal overlays + restore scroll in the active tab. Returns count. */
     removeOverlay() {
       try {
-        return killOverlays(activeFrameWin);
+        return killOverlays(tabs.get(activeTabId)?.win);
       } catch {
         return 0;
       }
     },
     /** Strip tracking query params from a URL (LegitimateURLShortener rules). */
     cleanUrl,
-    onUrlChange(fn) {
-      listeners.add(fn);
-      return () => listeners.delete(fn);
-    },
     normalizeInput,
     /** Read ad-blocker stats from the service worker. */
     adblockState() {

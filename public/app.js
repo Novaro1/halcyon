@@ -81,25 +81,67 @@
   const grid = $("#apps-grid");
   SITES.forEach((s) => grid.appendChild(tile(s, "card")));
 
-  // ---- Proxy launch flow ----
-  const iframe = $("#frame");
+  // ---- Proxy tabs + launch flow ----
   const loader = $("#frame-loader");
   const tbInput = $("#tb-input");
+  const tabstrip = $("#tabstrip");
+  Halcyon.initTabs($("#frames"));
 
-  Halcyon.onUrlChange((url) => {
-    if (document.activeElement !== tbInput) tbInput.value = url;
-    loader.classList.add("hidden");
-    lastRealUrl = url;
+  let lastActiveUrl = "";
+
+  // Render the tab strip and drive the address bar + loader from tab state.
+  Halcyon.onTabs((state) => {
+    const active = state.tabs.find((t) => t.active) || null;
+    lastActiveUrl = active?.url || "";
+    if (active && document.activeElement !== tbInput) tbInput.value = active.url || "";
+    loader.classList.toggle("hidden", !(active && active.loading));
+
+    tabstrip.style.display = state.tabs.length ? "" : "none";
+    tabstrip.innerHTML = "";
+    for (const t of state.tabs) {
+      const chip = document.createElement("div");
+      chip.className = "tab" + (t.active ? " active" : "");
+      chip.title = t.url || "New tab";
+      const title = document.createElement("span");
+      title.className = "t-title";
+      title.textContent = t.title || "New Tab";
+      const close = document.createElement("button");
+      close.className = "t-close";
+      close.type = "button";
+      close.innerHTML = "&times;";
+      close.title = "Close tab";
+      close.addEventListener("click", (e) => {
+        e.stopPropagation();
+        Halcyon.closeTab(t.id);
+        if (!Halcyon.tabsState().tabs.length) show("home");
+      });
+      chip.append(title, close);
+      chip.addEventListener("click", () => {
+        Halcyon.switchTab(t.id);
+        show(t.url ? "proxy" : "home");
+      });
+      tabstrip.appendChild(chip);
+    }
+    const plus = document.createElement("button");
+    plus.className = "tab-new";
+    plus.type = "button";
+    plus.innerHTML = "+";
+    plus.title = "New tab";
+    plus.addEventListener("click", () => {
+      Halcyon.newTab();
+      show("home");
+    });
+    tabstrip.appendChild(plus);
   });
-  let lastRealUrl = "";
 
+  // Navigate the active tab (creating one if none exist).
   async function launch(input) {
     if (!input) return;
     show("proxy");
     loader.classList.remove("hidden");
     tbInput.value = Halcyon.normalizeInput(input) || input;
     try {
-      await Halcyon.go(input, iframe);
+      await Halcyon.go(input);
     } catch (err) {
       console.error(err);
       loader.classList.add("hidden");
@@ -134,14 +176,10 @@
   });
   $("#tb-back").addEventListener("click", () => Halcyon.back());
   $("#tb-forward").addEventListener("click", () => Halcyon.forward());
-  $("#tb-reload").addEventListener("click", () => {
-    loader.classList.remove("hidden");
-    Halcyon.reload();
-    setTimeout(() => loader.classList.add("hidden"), 1500);
-  });
+  $("#tb-reload").addEventListener("click", () => Halcyon.reload());
   $("#tb-home").addEventListener("click", () => show("home"));
   $("#tb-newtab").addEventListener("click", () => {
-    if (lastRealUrl) window.open(lastRealUrl, "_blank");
+    if (lastActiveUrl) window.open(lastActiveUrl, "_blank");
   });
   // "Behind the overlay" — dismiss modal overlays + restore scroll on demand.
   $("#tb-overlay")?.addEventListener("click", () => {

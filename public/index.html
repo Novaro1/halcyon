@@ -256,6 +256,7 @@
 
         <!-- PROXY VIEW -->
         <section class="view proxy" data-view="proxy">
+          <div class="tabstrip" id="tabstrip"></div>
           <div class="topbar">
             <button class="tb-btn" id="tb-back" title="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
             <button class="tb-btn" id="tb-forward" title="Forward"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
@@ -269,7 +270,7 @@
             <button class="tb-btn" id="tb-home" title="Home"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/></svg></button>
           </div>
           <div class="frame-wrap">
-            <iframe id="frame" title="Halcyon"></iframe>
+            <div id="frames" class="frames"></div>
             <div class="frame-loader" id="frame-loader">
               <span class="load-orb"><span class="orb"></span></span>
               <p class="load-text">Weaving the connection…</p>
