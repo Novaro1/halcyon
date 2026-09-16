@@ -17,6 +17,10 @@ Source: [github.com/Novaro1/halcyon](https://github.com/Novaro1/halcyon).
   old `ScramjetController` API. Verified against Wikipedia, DuckDuckGo, and more.
 - **Homepage** with an omni search/URL bar and quick-launch shortcuts.
 - **Apps grid** of common sites, one click to launch.
+- **Tabbed browsing** — real tabs, each its own Scramjet frame + iframe sharing
+  the one controller/transport/service worker; only the active tab renders while
+  the rest stay mounted and keep their state. Tab strip with live page titles,
+  close buttons and a **+** for new tabs.
 - **In-proxy toolbar** — back / forward / reload / address bar / open-in-new-tab / home.
 - **Built-in ad, tracker & malware blocker** — a ~357k-domain DNS-style
   blocklist, unioned from
