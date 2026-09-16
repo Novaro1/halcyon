@@ -22,6 +22,10 @@ Source: [github.com/Novaro1/halcyon](https://github.com/Novaro1/halcyon).
   the rest stay mounted and keep their state. Tab strip with live page titles,
   close buttons and a **+** for new tabs.
 - **In-proxy toolbar** — back / forward / reload / address bar / open-in-new-tab / home.
+- **Bookmarks & history** — a star in the toolbar bookmarks the current site (it
+  then appears as a row on the home page); every visit is recorded to a History
+  view (deduped, most-recent-first, with per-row remove and a clear button). Both
+  live only in `localStorage` — nothing is sent anywhere.
 - **Built-in ad, tracker & malware blocker** — a ~357k-domain DNS-style
   blocklist, unioned from
   [HaGeZi Multi PRO](https://github.com/hagezi/dns-blocklists) (ads, trackers,
