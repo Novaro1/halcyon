@@ -39,7 +39,10 @@ a proxy URL, since proxy URLs rotate.
 
 ## Workflow
 
-1. Deploy one or more mirrors: `HALCYON_PASSWORD='…' ./deploy/deploy-all.sh app1 app2`
-   (see [`../deploy/deploy-all.sh`](../deploy/deploy-all.sh)).
-2. Put the working URLs into `links.json`.
+1. Stand up the origin + point domains at it (see
+   [`../deploy/README.md`](../deploy/README.md)) and list them in
+   [`../domains.txt`](../domains.txt).
+2. Mirror that list into `links.json` (there's a one-liner in the deploy README
+   to regenerate it from `domains.txt`).
 3. Push / redeploy the hub. Visitors always see the current, reachable links.
+   Keep the hub unlisted and share its URL only in your Discord.

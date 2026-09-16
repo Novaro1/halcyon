@@ -1,0 +1,11 @@
+# Domains this Halcyon origin will serve — one per line.
+#
+# All of these should A-record to this server's IP (e.g. free subdomains from
+# https://freedns.afraid.org). Caddy's on-demand TLS only issues a certificate
+# for a domain that's listed here, so pointing a random domain at your IP won't
+# trigger cert issuance. Add a line + create the DNS record → the next visit to
+# that domain just works (no restart). Keep this in sync with hub/links.json.
+#
+# Lines starting with # are comments. Example:
+# halcyon.mooo.com
+# calm-window.chickenkiller.com

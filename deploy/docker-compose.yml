@@ -1,0 +1,43 @@
+# Halcyon + Caddy, the "one origin, many domains" stack for a VPS.
+#
+#   cd deploy
+#   HALCYON_PASSWORD='your-shared-passphrase' docker compose up -d --build
+#
+# Then point your FreeDNS domains' A-records at this server's public IP and add
+# each to ../domains.txt. Caddy issues certs on demand (allowlisted by Halcyon)
+# and proxies everything — including the Wisp WebSocket — to Halcyon.
+
+services:
+  halcyon:
+    build: ..
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8080"
+      # Required — the shared passphrase (set it in your shell / an .env file,
+      # never commit it). Everything past the gate rides the abuse guardrails.
+      HALCYON_PASSWORD: ${HALCYON_PASSWORD:?set HALCYON_PASSWORD}
+      # Optional filtering resolver, etc. — see the main README.
+      # HALCYON_DNS: 94.140.14.14,94.140.15.15
+    volumes:
+      # Live-editable domain allowlist (add a domain without a rebuild).
+      - ../domains.txt:/app/domains.txt:ro
+    expose:
+      - "8080" # internal only; Caddy is the public face
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - halcyon
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data # issued certs live here — persist them
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

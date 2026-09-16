@@ -132,6 +132,39 @@ const wispLimiter = makeLimiter(num("HALCYON_RL_WISP", 300), 60_000); // upgrade
 const MAX_WISP_CONCURRENT = num("HALCYON_MAX_CONN", 128); // concurrent tunnels/IP
 const wispConns = new Map(); // ip -> live connection count
 
+// ---- Domain allowlist (for Caddy on-demand TLS) ---------------------------
+// The many mirror domains (FreeDNS etc.) all point at this one origin. Caddy's
+// on-demand TLS asks `/_tls-check?domain=X` before issuing a cert, so issuance
+// can't be abused by anyone pointing a random domain at the IP. The list comes
+// from HALCYON_DOMAINS (comma-separated) and/or a file (default ./domains.txt),
+// re-read live so you can add a domain without a restart. Set HALCYON_DOMAINS=*
+// to serve ANY domain (convenient, but drops the abuse protection).
+const DOMAINS_FILE = process.env.HALCYON_DOMAINS_FILE || join(__dirname, "domains.txt");
+const DOMAINS_ENV = (process.env.HALCYON_DOMAINS || "")
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+let _domCache = { at: 0, set: new Set() };
+function allowedDomain(host) {
+  host = (host || "").toLowerCase().replace(/:\d+$/, "").replace(/\.$/, "");
+  if (!host) return false;
+  if (DOMAINS_ENV.includes("*")) return true;
+  if (DOMAINS_ENV.includes(host)) return true;
+  const now = Date.now();
+  if (now - _domCache.at > 10_000) {
+    try {
+      const lines = readFileSync(DOMAINS_FILE, "utf8")
+        .split("\n")
+        .map((l) => l.trim().toLowerCase())
+        .filter((l) => l && l[0] !== "#");
+      _domCache = { at: now, set: new Set(lines) };
+    } catch {
+      _domCache = { at: now, set: _domCache.set }; // keep last good on read error
+    }
+  }
+  return _domCache.set.has(host);
+}
+
 // ---- Resolve the scramjet runtime files out of node_modules ---------------
 const scramjetDist = require("@mercuryworkshop/scramjet/path").scramjetPath;
 const controllerDist = dirname(require.resolve("@mercuryworkshop/scramjet-controller"));
@@ -532,6 +565,16 @@ const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host}`);
     let path = decodeURIComponent(url.pathname);
+
+    // Caddy on-demand-TLS allowlist check (internal; Caddy 404s it publicly).
+    // Answered before rate-limit/auth so onboarding a batch of domains isn't
+    // throttled and doesn't need a passphrase.
+    if (path === "/_tls-check") {
+      const ok = allowedDomain(url.searchParams.get("domain") || "");
+      res.writeHead(ok ? 200 : 403, { "Content-Type": "text/plain" });
+      return res.end(ok ? "ok" : "no");
+    }
+
     const ip = clientIp(req);
 
     // General per-IP request ceiling (stops runaway scripts; generous for NATs).

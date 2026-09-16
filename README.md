@@ -142,18 +142,22 @@ HALCYON_PASSWORD='something-long' HOST=0.0.0.0 npm start
 ## Going public — mirrors & the links hub
 
 A public web-unblocker lives or dies by having **many links** (schools block
-domains, so you run several and treat each as replaceable) and a durable
-**links hub** users bookmark.
+domains, so you keep spares and treat each as replaceable) and a durable
+**links hub**. The model is **one origin (one server/IP) + many domains pointing
+at it** — a blocked domain is swapped for another domain on the same box, no
+redeploy. Links are handed out through your Discord.
 
-- **Deploy several mirrors at once:**
-  `HALCYON_PASSWORD='…' ./deploy/deploy-all.sh app1 app2 app3` deploys the same
-  image to multiple Fly apps, each on its own `<app>.fly.dev`, all passphrase-
-  gated ([`deploy/deploy-all.sh`](deploy/deploy-all.sh)).
-- **The links hub** ([`hub/`](hub/)) is a standalone static page that lists the
-  current mirrors and live-checks which are reachable from the visitor's network
-  (green/red dot). Host it on a resilient static host (GitHub/Cloudflare Pages),
-  **separate from the proxies**, and give it its own memorable domain — that's
-  the URL you hand out, since proxy URLs rotate. See [`hub/README.md`](hub/README.md).
+- **Run the origin** on a cheap VPS with the Docker Compose stack in
+  [`deploy/`](deploy/) — Halcyon behind **Caddy with on-demand TLS**. Point
+  [freedns.afraid.org](https://freedns.afraid.org) subdomains' A-records at the
+  server and add each to [`domains.txt`](domains.txt); Caddy issues each cert
+  automatically (only for allowlisted domains, so it can't be abused) and there's
+  no per-domain config or restart. Full walkthrough: [`deploy/README.md`](deploy/README.md).
+- **The links hub** ([`hub/`](hub/)) is a standalone static page listing the
+  current domains and live-checking which are reachable from the visitor's
+  network (green/red dot). Host it on a resilient static host (GitHub/Cloudflare
+  Pages), **separate from the origin**, keep it unlisted, and share its URL only
+  in Discord. See [`hub/README.md`](hub/README.md).
 
 ## Security & privacy — what it does and doesn't protect
 

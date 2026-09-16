@@ -1,0 +1,36 @@
+# Caddy front for Halcyon — one origin, unlimited mirror domains.
+#
+# Any domain that points at this server gets HTTPS automatically (on-demand
+# TLS), but ONLY if Halcyon's /_tls-check allowlist approves it — so nobody can
+# abuse cert issuance by aiming a random domain at your IP. Add domains in
+# ../domains.txt; no Caddy or restart changes needed.
+
+{
+	# Uncomment and set a real address to get cert-expiry / issue notices:
+	# email you@example.com
+
+	on_demand_tls {
+		ask http://halcyon:8080/_tls-check
+	}
+}
+
+# Redirect plain HTTP to HTTPS for any host (ACME challenges still handled).
+:80 {
+	redir https://{host}{uri} permanent
+}
+
+# Any HTTPS host → on-demand cert, then proxy to Halcyon. reverse_proxy passes
+# WebSocket upgrades through automatically, so /wisp/ just works. Caddy also
+# sets X-Forwarded-For / -Proto, which Halcyon reads for real client IPs + the
+# Secure cookie flag.
+:443 {
+	tls {
+		on_demand
+	}
+
+	# Never expose the internal allowlist check to the public.
+	@internal path /_tls-check*
+	respond @internal 404
+
+	reverse_proxy halcyon:8080
+}
