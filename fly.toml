@@ -1,0 +1,24 @@
+# Fly.io deployment for Halcyon.
+# App name must be globally unique on Fly — change it if `fly apps create` says
+# it's taken, and keep this in sync.
+app = "halcyon-proxy"
+primary_region = "iad"
+
+[build]
+
+[env]
+  HOST = "0.0.0.0"
+  PORT = "8080"
+
+# Fly's proxy terminates TLS and upgrades the Wisp WebSocket to the container.
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Scale to zero when idle to keep it cheap; wakes on the next request.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
