@@ -139,6 +139,22 @@ Environment:
 HALCYON_PASSWORD='something-long' HOST=0.0.0.0 npm start
 ```
 
+## Going public — mirrors & the links hub
+
+A public web-unblocker lives or dies by having **many links** (schools block
+domains, so you run several and treat each as replaceable) and a durable
+**links hub** users bookmark.
+
+- **Deploy several mirrors at once:**
+  `HALCYON_PASSWORD='…' ./deploy/deploy-all.sh app1 app2 app3` deploys the same
+  image to multiple Fly apps, each on its own `<app>.fly.dev`, all passphrase-
+  gated ([`deploy/deploy-all.sh`](deploy/deploy-all.sh)).
+- **The links hub** ([`hub/`](hub/)) is a standalone static page that lists the
+  current mirrors and live-checks which are reachable from the visitor's network
+  (green/red dot). Host it on a resilient static host (GitHub/Cloudflare Pages),
+  **separate from the proxies**, and give it its own memorable domain — that's
+  the URL you hand out, since proxy URLs rotate. See [`hub/README.md`](hub/README.md).
+
 ## Security & privacy — what it does and doesn't protect
 
 **What's protected:**
