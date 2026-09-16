@@ -42,6 +42,10 @@
             <svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg>
             <span class="tip">Apps</span>
           </button>
+          <button class="nav-btn" data-nav="history" title="History">
+            <svg viewBox="0 0 24 24"><path d="M12 8v5l3 2M3.05 11a9 9 0 1 1 .5 4M3 20v-5h5"/></svg>
+            <span class="tip">History</span>
+          </button>
           <button class="nav-btn" data-nav="settings" title="Settings">
             <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.03-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
             <span class="tip">Settings</span>
@@ -88,6 +92,9 @@
                 <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
               </button>
             </form>
+
+            <div class="ql-label bm-label" id="bookmarks-label" hidden>Bookmarks</div>
+            <div class="quicklinks" id="bookmarks"></div>
 
             <div class="ql-label">Jump back in</div>
             <div class="quicklinks" id="quicklinks"></div>
@@ -257,6 +264,19 @@
           </div>
         </section>
 
+        <!-- HISTORY -->
+        <section class="view" data-view="history">
+          <header class="view-head">
+            <h2>History</h2>
+            <p>Where you've been — stored only in this browser, never sent anywhere.</p>
+          </header>
+          <div class="history-tools">
+            <button id="history-clear" class="wipe-btn" type="button">Clear history</button>
+          </div>
+          <div class="history-list" id="history-list"></div>
+          <p class="history-empty" id="history-empty" hidden>No history yet.</p>
+        </section>
+
         <!-- PROXY VIEW -->
         <section class="view proxy" data-view="proxy">
           <div class="topbar">
@@ -267,6 +287,7 @@
               <span class="tb-lock"><svg viewBox="0 0 24 24"><path d="M6 10V8a6 6 0 1112 0v2m-13 0h14v10H5z"/></svg></span>
               <input id="tb-input" type="text" autocomplete="off" spellcheck="false" />
             </form>
+            <button class="tb-btn" id="tb-bookmark" title="Bookmark this page"><svg viewBox="0 0 24 24"><path d="M12 17.3l-6.2 3.7 1.6-7L2 9.2l7.1-.6L12 2l2.9 6.6 7.1.6-5.4 4.8 1.6 7z"/></svg></button>
             <button class="tb-btn" id="tb-overlay" title="Remove overlay (dismiss modal + restore scroll)"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
             <button class="tb-btn" id="tb-newtab" title="Open in new tab"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></svg></button>
             <button class="tb-btn" id="tb-home" title="Home"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/></svg></button>

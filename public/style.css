@@ -600,6 +600,44 @@ kbd {
   color: var(--muted);
 }
 .tab-new:hover { background: var(--glass-strong); color: var(--text); }
+
+/* ---- Bookmark star + bookmark tiles ---- */
+#tb-bookmark.active { color: var(--teal); }
+#tb-bookmark.active svg { fill: var(--teal); stroke: var(--teal); }
+.ql .bm-x {
+  margin-left: 2px; width: 18px; height: 18px;
+  display: grid; place-items: center;
+  border-radius: 6px; font-size: 14px; line-height: 1;
+  color: var(--faint); opacity: 0;
+  transition: opacity 0.16s, background 0.16s, color 0.16s;
+}
+.ql:hover .bm-x { opacity: 1; }
+.ql .bm-x:hover { background: var(--stroke); color: var(--text); }
+
+/* ---- History view ---- */
+.history-tools { max-width: 1040px; margin: 0 auto 18px; display: flex; }
+.history-list { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; }
+.hist-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 14px; border-radius: 14px;
+  background: var(--glass); border: 1px solid var(--stroke-soft);
+  cursor: pointer; transition: background 0.16s, border-color 0.16s, transform 0.16s;
+}
+.hist-item:hover { background: var(--glass-strong); border-color: var(--stroke); transform: translateY(-1px); }
+.hist-ico {
+  flex: none; width: 30px; height: 30px; border-radius: 9px;
+  display: grid; place-items: center; font-size: 13px; font-weight: 800; color: #fff;
+}
+.hist-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.hist-title { font-size: 14px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist-url { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist-time { flex: none; font-size: 12px; color: var(--faint); }
+.hist-x {
+  flex: none; width: 24px; height: 24px; display: grid; place-items: center;
+  border-radius: 7px; font-size: 16px; color: var(--faint);
+}
+.hist-x:hover { background: var(--stroke); color: var(--text); }
+.history-empty { max-width: 1040px; margin: 20px auto; color: var(--muted); }
 .frame-loader {
   position: absolute; inset: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;

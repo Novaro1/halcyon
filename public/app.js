@@ -187,6 +187,176 @@
     toast(n > 0 ? `Removed ${n} overlay${n > 1 ? "s" : ""}` : "Scroll unlocked — no overlay found");
   });
 
+  // ---- Bookmarks & History (localStorage; never leaves this browser) --------
+  const hostLabel = (url) => {
+    try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; }
+  };
+  const avatarLetter = (url) => (hostLabel(url)[0] || "?").toUpperCase();
+  const avatarColor = (url) => {
+    const h = hostLabel(url);
+    let n = 0;
+    for (const c of h) n = (n * 31 + c.charCodeAt(0)) >>> 0;
+    return `hsl(${n % 360} 58% 46%)`;
+  };
+  const timeAgo = (ts) => {
+    const s = Math.floor((Date.now() - ts) / 1000);
+    if (s < 60) return "just now";
+    const m = Math.floor(s / 60);
+    if (m < 60) return m + "m ago";
+    const h = Math.floor(m / 60);
+    if (h < 24) return h + "h ago";
+    return Math.floor(h / 24) + "d ago";
+  };
+
+  // -- Bookmarks --
+  const Bookmarks = {
+    all() { try { return JSON.parse(store.get("bookmarks", "[]")); } catch { return []; } },
+    save(a) { store.set("bookmarks", JSON.stringify(a)); },
+    has(url) { return this.all().some((b) => b.url === url); },
+    add(url, title) {
+      if (!url || this.has(url)) return;
+      const a = this.all();
+      a.unshift({ url, title: title || hostLabel(url), at: Date.now() });
+      this.save(a);
+    },
+    remove(url) { this.save(this.all().filter((b) => b.url !== url)); },
+  };
+  const bmRow = $("#bookmarks");
+  const bmLabel = $("#bookmarks-label");
+  const starBtn = $("#tb-bookmark");
+
+  function renderBookmarks() {
+    const list = Bookmarks.all();
+    bmLabel.hidden = bmRow.hidden = list.length === 0;
+    bmRow.innerHTML = "";
+    for (const b of list) {
+      const el = document.createElement("button");
+      el.className = "ql";
+      el.style.setProperty("--glow", avatarColor(b.url));
+      const ico = document.createElement("span");
+      ico.className = "ico";
+      ico.style.background = avatarColor(b.url);
+      ico.textContent = avatarLetter(b.url);
+      const name = document.createTextNode(b.title || hostLabel(b.url));
+      const x = document.createElement("span");
+      x.className = "bm-x";
+      x.innerHTML = "&times;";
+      x.title = "Remove bookmark";
+      x.addEventListener("click", (e) => { e.stopPropagation(); Bookmarks.remove(b.url); renderBookmarks(); });
+      el.append(ico, name, x);
+      el.addEventListener("click", () => launch(b.url));
+      bmRow.appendChild(el);
+    }
+  }
+
+  const activeTab = () => Halcyon.tabsState().tabs.find((t) => t.active) || null;
+  const activeHttpUrl = () => {
+    const a = activeTab();
+    return a && /^https?:/.test(a.url) ? a.url : "";
+  };
+  function updateStar() {
+    const url = activeHttpUrl();
+    starBtn.classList.toggle("active", !!url && Bookmarks.has(url));
+  }
+  starBtn.addEventListener("click", () => {
+    const url = activeHttpUrl();
+    if (!url) return;
+    const a = activeTab();
+    if (Bookmarks.has(url)) Bookmarks.remove(url);
+    else Bookmarks.add(url, a && a.title);
+    renderBookmarks();
+    updateStar();
+    toast(Bookmarks.has(url) ? "Bookmarked" : "Bookmark removed");
+  });
+
+  // -- History --
+  const History = {
+    all() { try { return JSON.parse(store.get("history", "[]")); } catch { return []; } },
+    save(a) { store.set("history", JSON.stringify(a)); },
+    record(url, title) {
+      if (!url || !/^https?:/.test(url)) return;
+      let a = this.all().filter((h) => h.url !== url);
+      a.unshift({ url, title: title || hostLabel(url), at: Date.now() });
+      if (a.length > 300) a = a.slice(0, 300);
+      this.save(a);
+      renderHistory();
+    },
+    touchTitle(url, title) {
+      if (!title) return;
+      const a = this.all();
+      const it = a.find((h) => h.url === url);
+      if (it && it.title !== title) { it.title = title; this.save(a); renderHistory(); }
+    },
+    clear() { this.save([]); renderHistory(); },
+  };
+  const histList = $("#history-list");
+  const histEmpty = $("#history-empty");
+
+  function renderHistory() {
+    const list = History.all();
+    histEmpty.hidden = list.length > 0;
+    histList.innerHTML = "";
+    for (const h of list) {
+      const row = document.createElement("div");
+      row.className = "hist-item";
+      const ico = document.createElement("span");
+      ico.className = "hist-ico";
+      ico.style.background = avatarColor(h.url);
+      ico.textContent = avatarLetter(h.url);
+      const main = document.createElement("span");
+      main.className = "hist-main";
+      const title = document.createElement("span");
+      title.className = "hist-title";
+      title.textContent = h.title || hostLabel(h.url);
+      const url = document.createElement("span");
+      url.className = "hist-url";
+      url.textContent = h.url;
+      main.append(title, url);
+      const time = document.createElement("span");
+      time.className = "hist-time";
+      time.textContent = timeAgo(h.at);
+      const x = document.createElement("button");
+      x.className = "hist-x";
+      x.type = "button";
+      x.innerHTML = "&times;";
+      x.title = "Remove";
+      x.addEventListener("click", (e) => {
+        e.stopPropagation();
+        History.save(History.all().filter((v) => v.url !== h.url));
+        renderHistory();
+      });
+      row.append(ico, main, time, x);
+      row.addEventListener("click", () => launch(h.url));
+      histList.appendChild(row);
+    }
+  }
+  $("#history-clear").addEventListener("click", () => {
+    if (confirm("Clear all browsing history from this device?")) History.clear();
+  });
+
+  // Record visits + keep the star in sync as tabs navigate. Only record once a
+  // tab has actually LOADED (loading === false) — otherwise the optimistic
+  // pre-navigation URL set on go() (e.g. the typed "wikipedia.org", pre-redirect)
+  // gets logged as a separate entry from the resolved page.
+  const histSeen = new Map();
+  Halcyon.onTabs((state) => {
+    for (const t of state.tabs) {
+      if (t.url && !t.loading && /^https?:/.test(t.url)) {
+        if (histSeen.get(t.id) !== t.url) {
+          histSeen.set(t.id, t.url);
+          History.record(t.url, t.title);
+        } else {
+          History.touchTitle(t.url, t.title);
+        }
+      }
+    }
+    updateStar();
+  });
+
+  renderBookmarks();
+  renderHistory();
+  updateStar();
+
   // ---- Settings ----
   const engineSel = $("#set-engine");
   const wispIn = $("#set-wisp");
