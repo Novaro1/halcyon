@@ -201,7 +201,11 @@ input, select { font-family: inherit; }
   flex: 1;
   border-radius: 26px;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
+/* Positioning context for the (absolutely-stacked) views, below the tab bar. */
+.viewport { position: relative; flex: 1; min-height: 0; }
 .view {
   position: absolute;
   inset: 0;
