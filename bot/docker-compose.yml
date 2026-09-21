@@ -1,0 +1,18 @@
+# Halcyon Discord bot. Runs anywhere Docker does (e.g. the same VPS as the proxy).
+#
+#   cd bot
+#   cp .env.example .env   # then fill it in
+#   docker compose up -d --build
+#
+# Secrets come from a .env file next to this one (never commit it).
+
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    environment:
+      DISCORD_TOKEN: ${DISCORD_TOKEN:?set DISCORD_TOKEN}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:?set DISCORD_CLIENT_ID}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
+      HALCYON_PASSPHRASE: ${HALCYON_PASSPHRASE:-}
+      LINKS_URL: ${LINKS_URL:-https://novaro1.github.io/halcyon/links.json}
