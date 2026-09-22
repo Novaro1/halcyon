@@ -1,0 +1,30 @@
+name = "halcyon-gate"
+main = "src/worker.js"
+compatibility_date = "2024-11-01"
+
+# ---- Public config (safe to commit) --------------------------------------
+[vars]
+DISCORD_CLIENT_ID = "1551413679205912696"
+GUILD_ID = "1551410324115169352"
+# Leave blank to allow ANY member of the server. Set it to your "Member" (verified)
+# role ID to require that people have passed the Verify step. Create the role first,
+# then: Discord (Developer Mode on) -> Server Settings -> Roles -> right-click the
+# Member role -> Copy Role ID.
+MEMBER_ROLE_ID = ""
+DISCORD_INVITE = "https://discord.gg/n6AJJASUkd"
+# The links, as a JSON array. Quick-start store — edit + `wrangler deploy` to update.
+# (For no-redeploy updates, bind a KV namespace named LINKS instead; see README.)
+LINKS_JSON = '[{"name":"Halcyon","url":"https://portal.imaginelearningmath.com","host":"afraid.org"}]'
+
+# ---- Secrets (do NOT put here — set with `wrangler secret put NAME`) -------
+#   DISCORD_CLIENT_SECRET   Discord Developer Portal -> your app -> OAuth2 -> Reset Secret
+#   SESSION_SECRET          any long random string (signs the login cookie)
+#   BOT_LINKS_SECRET        any long random string (lets the bot read /bot/links)
+
+# ---- Optional: KV store for links (no-redeploy updates) -------------------
+# 1) wrangler kv namespace create LINKS   (copy the id it prints)
+# 2) uncomment + paste the id below
+# 3) wrangler kv key put --binding=LINKS mirrors '[{"name":"Halcyon","url":"https://…","host":"afraid.org"}]'
+# [[kv_namespaces]]
+# binding = "LINKS"
+# id = "REPLACE_WITH_KV_ID"
