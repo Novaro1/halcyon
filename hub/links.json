@@ -1,6 +1,6 @@
 {
   "discord": "https://discord.gg/n6AJJASUkd",
-  "gate": "__GATE_URL__",
+  "gate": "https://halcyon-gate.clarity-hq.workers.dev",
   "note": "Links are members-only — log in with Discord to reveal them.",
   "mirrors": []
 }
