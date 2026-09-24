@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
     <title>Halcyon — Links</title>
-    <meta name="description" content="Current working links for Halcyon." />
+    <meta name="description" content="Members-only working links for Halcyon." />
     <link
       href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,900;1,9..144,500&family=Hanken+Grotesk:wght@400;500;600;700&display=swap"
       rel="stylesheet"
@@ -25,8 +25,6 @@
         --stroke: rgba(255, 250, 240, 0.14);
         --stroke-soft: rgba(255, 250, 240, 0.09);
         --grad: linear-gradient(118deg, var(--teal) 0%, var(--gold) 52%, var(--copper) 100%);
-        --ok: #1fd1a3;
-        --down: #ff8f8f;
         --font: "Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         --display: "Fraunces", Georgia, serif;
       }
@@ -39,72 +37,46 @@
           radial-gradient(900px 520px at 105% 12%, rgba(255, 138, 76, 0.12), transparent 55%),
           var(--bg);
         display: flex; flex-direction: column; align-items: center;
-        padding: 8vh 20px 64px;
+        padding: 10vh 20px 64px;
       }
-      .wrap { width: 100%; max-width: 620px; }
-      header { text-align: center; margin-bottom: 34px; }
+      .wrap { width: 100%; max-width: 560px; }
+      header { text-align: center; margin-bottom: 30px; }
       .orb {
-        width: 52px; height: 52px; border-radius: 50%; margin: 0 auto 18px;
-        background: var(--grad); box-shadow: 0 0 26px rgba(31, 209, 163, 0.5);
+        width: 60px; height: 60px; border-radius: 50%; margin: 0 auto 18px;
+        background: var(--grad); box-shadow: 0 0 30px rgba(31, 209, 163, 0.5);
       }
       h1 {
-        font-family: var(--display); font-weight: 900; font-size: 52px;
+        font-family: var(--display); font-weight: 900; font-size: 54px;
         letter-spacing: -1px; margin: 0;
         background: var(--grad); -webkit-background-clip: text; background-clip: text;
         -webkit-text-fill-color: transparent;
       }
       .tagline { color: var(--muted); font-size: 15px; margin: 8px 0 0; }
-      .note {
-        margin: 22px auto 0; max-width: 460px;
-        color: var(--faint); font-size: 13px; line-height: 1.5;
+      .gatecard {
+        text-align: center; background: var(--glass);
+        border: 1px solid var(--stroke-soft); border-radius: 18px; padding: 30px 24px;
       }
-      .mirrors { display: flex; flex-direction: column; gap: 12px; }
-      .mirror {
-        display: flex; align-items: center; gap: 14px;
-        padding: 16px 18px; border-radius: 16px;
-        background: var(--glass); border: 1px solid var(--stroke-soft);
-        text-decoration: none; color: var(--text);
-        transition: transform 0.18s ease, border-color 0.18s, background 0.18s;
+      .lead { color: var(--muted); font-size: 15px; line-height: 1.55; margin: 0 0 22px; }
+      .lead strong { color: var(--text); }
+      .getlinks {
+        display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+        padding: 16px 28px; border-radius: 14px; background: var(--grad);
+        color: #04120e; font-weight: 800; font-size: 16px; text-decoration: none;
+        box-shadow: 0 10px 30px rgba(31, 209, 163, 0.25); transition: transform 0.18s;
       }
-      .mirror:hover {
-        transform: translateY(-2px); background: var(--glass-strong);
-        border-color: color-mix(in srgb, var(--teal) 45%, transparent);
-      }
-      .dot {
-        flex: none; width: 11px; height: 11px; border-radius: 50%;
-        background: var(--faint); box-shadow: 0 0 0 0 transparent;
-      }
-      .dot.ok { background: var(--ok); box-shadow: 0 0 10px rgba(31, 209, 163, 0.7); }
-      .dot.down { background: var(--down); }
-      .dot.checking { background: var(--gold); animation: pulse 1s ease-in-out infinite; }
-      @keyframes pulse { 50% { opacity: 0.35; } }
-      .m-main { flex: 1; min-width: 0; }
-      .m-name { font-weight: 700; font-size: 16px; }
-      .m-url { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .m-host { flex: none; color: var(--faint); font-size: 12px; }
-      .copy {
-        flex: none; width: 34px; height: 34px; border: 0; cursor: pointer;
-        border-radius: 10px; background: transparent; color: var(--muted);
-        display: grid; place-items: center;
-      }
-      .copy:hover { background: var(--stroke); color: var(--text); }
-      .copy svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+      .getlinks:hover { transform: translateY(-2px); }
       .discord {
         display: flex; align-items: center; justify-content: center; gap: 10px;
-        margin-top: 22px; padding: 15px; border-radius: 16px;
+        margin-top: 16px; padding: 15px; border-radius: 16px;
         background: rgba(88, 101, 242, 0.16); border: 1px solid rgba(88, 101, 242, 0.4);
         color: #c7ceff; text-decoration: none; font-weight: 700; font-size: 15px;
         transition: background 0.18s;
       }
       .discord:hover { background: rgba(88, 101, 242, 0.26); }
-      .discord[hidden] { display: none; }
+      .discord[hidden], .getlinks[hidden] { display: none; }
       footer { text-align: center; color: var(--faint); font-size: 12px; margin-top: 34px; line-height: 1.6; }
       footer a { color: var(--muted); }
-      .empty { text-align: center; color: var(--muted); padding: 30px; }
-      @media (max-width: 520px) {
-        h1 { font-size: 42px; }
-        .m-host { display: none; }
-      }
+      @media (max-width: 520px) { h1 { font-size: 44px; } }
     </style>
   </head>
   <body>
@@ -113,79 +85,36 @@
         <div class="orb"></div>
         <h1>Halcyon</h1>
         <p class="tagline">A calm window on the open web.</p>
-        <p class="note" id="note"></p>
       </header>
 
-      <main class="mirrors" id="mirrors">
-        <div class="empty">Loading links…</div>
+      <main class="gatecard">
+        <p class="lead">
+          The working links are <strong>members only</strong>. Log in with Discord to
+          confirm you're a verified member of the server, and your links appear instantly.
+        </p>
+        <a class="getlinks" id="getlinks" href="#" hidden>Log in with Discord to get links</a>
+        <a class="discord" id="discord" href="#" hidden>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4a19 19 0 0 0-4.9-1.5l-.3.5A17 17 0 0 1 18 4.6 17.6 17.6 0 0 0 6 4.6 17 17 0 0 1 9.2 3l-.3-.5A19 19 0 0 0 4 4C1.6 7.7 1 11.3 1.2 14.8A19 19 0 0 0 7 17.8l.4-.6a12 12 0 0 1-1.9-.9l.5-.4a13.6 13.6 0 0 0 11.8 0l.5.4a12 12 0 0 1-1.9.9l.4.6a19 19 0 0 0 5.8-3C23.1 10.7 22.1 7.1 20 4ZM8.4 13.3c-.9 0-1.7-.9-1.7-1.9s.8-1.9 1.7-1.9 1.7.9 1.7 1.9-.8 1.9-1.7 1.9Zm7.2 0c-.9 0-1.7-.9-1.7-1.9s.8-1.9 1.7-1.9 1.7.9 1.7 1.9-.8 1.9-1.7 1.9Z"/></svg>
+          Join the Discord
+        </a>
       </main>
 
-      <a class="discord" id="discord" href="#" hidden>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4a19 19 0 0 0-4.9-1.5l-.3.5A17 17 0 0 1 18 4.6 17.6 17.6 0 0 0 6 4.6 17 17 0 0 1 9.2 3l-.3-.5A19 19 0 0 0 4 4C1.6 7.7 1 11.3 1.2 14.8A19 19 0 0 0 7 17.8l.4-.6a12 12 0 0 1-1.9-.9l.5-.4a13.6 13.6 0 0 0 11.8 0l.5.4a12 12 0 0 1-1.9.9l.4.6a19 19 0 0 0 5.8-3C23.1 10.7 22.1 7.1 20 4ZM8.4 13.3c-.9 0-1.7-.9-1.7-1.9s.8-1.9 1.7-1.9 1.7.9 1.7 1.9-.8 1.9-1.7 1.9Zm7.2 0c-.9 0-1.7-.9-1.7-1.9s.8-1.9 1.7-1.9 1.7.9 1.7 1.9-.8 1.9-1.7 1.9Z"/></svg>
-        Join the Discord
-      </a>
-
       <footer>
-        A green dot means the mirror is reachable from your network right now.
-        Blocked at school? Try another. <br />
+        Not in the server yet? Join the Discord, verify, then log in here. <br />
         Open source · <a href="https://github.com/Novaro1/halcyon">github.com/Novaro1/halcyon</a>
       </footer>
     </div>
 
     <script>
-      const $ = (s, r = document) => r.querySelector(s);
-      const listEl = $("#mirrors");
-
-      // Ping a mirror: no-cors fetch resolves on ANY HTTP response (incl. the
-      // 401 gate) → reachable; a network error / timeout → down or blocked.
-      function ping(url) {
-        return new Promise((resolve) => {
-          const ctrl = new AbortController();
-          const t = setTimeout(() => { ctrl.abort(); resolve(false); }, 7000);
-          fetch(url, { mode: "no-cors", cache: "no-store", signal: ctrl.signal })
-            .then(() => { clearTimeout(t); resolve(true); })
-            .catch(() => { clearTimeout(t); resolve(false); });
-        });
-      }
-
-      function card(m) {
-        const a = document.createElement("a");
-        a.className = "mirror";
-        a.href = m.url;
-        a.innerHTML =
-          '<span class="dot checking" title="Checking…"></span>' +
-          '<span class="m-main"><div class="m-name"></div><div class="m-url"></div></span>' +
-          '<span class="m-host"></span>' +
-          '<button class="copy" type="button" title="Copy link"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>';
-        a.querySelector(".m-name").textContent = m.name || m.url;
-        a.querySelector(".m-url").textContent = m.url.replace(/^https?:\/\//, "");
-        a.querySelector(".m-host").textContent = m.host || "";
-        const copy = a.querySelector(".copy");
-        copy.addEventListener("click", (e) => {
-          e.preventDefault();
-          navigator.clipboard?.writeText(m.url).then(() => {
-            copy.title = "Copied!";
-            setTimeout(() => (copy.title = "Copy link"), 1200);
-          });
-        });
-        const dot = a.querySelector(".dot");
-        ping(m.url).then((up) => {
-          dot.className = "dot " + (up ? "ok" : "down");
-          dot.title = up ? "Reachable" : "Unreachable / blocked here";
-        });
-        return a;
-      }
-
+      const $ = (s) => document.querySelector(s);
       fetch("links.json", { cache: "no-store" })
         .then((r) => r.json())
         .then((data) => {
-          if (data.note) $("#note").textContent = data.note;
-          const mirrors = Array.isArray(data.mirrors) ? data.mirrors : [];
-          listEl.innerHTML = "";
-          if (!mirrors.length) {
-            listEl.innerHTML = '<div class="empty">No links yet — check the Discord.</div>';
-          } else {
-            mirrors.forEach((m) => listEl.appendChild(card(m)));
+          // The gate Worker URL — members log in there to reveal the links.
+          if (data.gate && !data.gate.includes("__GATE_URL__")) {
+            const g = $("#getlinks");
+            g.href = data.gate;
+            g.hidden = false;
           }
           if (data.discord) {
             const d = $("#discord");
@@ -193,9 +122,7 @@
             d.hidden = false;
           }
         })
-        .catch(() => {
-          listEl.innerHTML = '<div class="empty">Couldn’t load the link list.</div>';
-        });
+        .catch(() => {});
     </script>
   </body>
 </html>
