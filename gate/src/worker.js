@@ -211,36 +211,55 @@ function htmlResponse(html) {
 /* --------------------------------------------------------------- pages ----- */
 
 const STYLE = `
-  :root{--teal:#1fd1a3;--copper:#ff8a4c;--ink:#071310;--paper:#f4eee1}
+  :root{
+    --bg:#071310; --teal:#1fd1a3; --copper:#ff8a4c; --gold:#ffd27a;
+    --text:#f4eee1; --muted:#9ba79a; --faint:#66756b;
+    --glass:rgba(255,250,240,0.05); --glass-strong:rgba(255,250,240,0.08);
+    --stroke-soft:rgba(255,250,240,0.06);
+    --grad:linear-gradient(118deg,var(--teal) 0%,var(--gold) 52%,var(--copper) 100%);
+    --font-display:"Fraunces",Georgia,"Times New Roman",serif;
+    --font-body:"Hanken Grotesk",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --ok:#1fd1a3; --down:#ff8f8f;
+  }
   *{box-sizing:border-box}
   body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center;
-    justify-content:center;gap:22px;padding:32px 16px;font-family:'Hanken Grotesk',system-ui,sans-serif;
-    color:var(--paper);background:radial-gradient(120% 90% at 42% 30%,#0e2b25,#081814 55%,#040d0b);text-align:center}
-  .orb{width:96px;height:96px;border-radius:50%;
-    background:radial-gradient(circle at 37% 33%,#f3fffb,#8ff0d6 16%,#25d6a8 42%,#1aa98a 64%,#ff9a5c 84%,#d55f31);
-    box-shadow:0 0 60px rgba(31,209,163,.45)}
-  h1{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:clamp(38px,9vw,64px);margin:0;
-    background:linear-gradient(100deg,var(--teal),var(--copper));-webkit-background-clip:text;background-clip:text;color:transparent}
-  p{margin:0;color:#cfe6de;max-width:34rem;line-height:1.5}
-  .muted{color:#8fb3a9;font-size:14px}
-  .btn{display:inline-flex;align-items:center;gap:10px;padding:14px 22px;border-radius:14px;border:0;
-    font:inherit;font-weight:700;cursor:pointer;text-decoration:none;color:#04120e}
+    justify-content:center;gap:22px;padding:8vh 20px 64px;font-family:var(--font-body);
+    color:var(--text);text-align:center;background:
+      radial-gradient(1100px 620px at 18% -5%, rgba(31,209,163,0.16), transparent 60%),
+      radial-gradient(900px 520px at 105% 12%, rgba(255,138,76,0.12), transparent 55%),
+      var(--bg)}
+  .orb{width:64px;height:64px;border-radius:50%;position:relative;margin:0 auto;
+    background:var(--grad);animation:orbGlow 5s ease-in-out infinite alternate}
+  .orb::after{content:"";position:absolute;inset:22%;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.92),rgba(255,255,255,0) 60%)}
+  @keyframes orbGlow{
+    from{box-shadow:0 0 14px rgba(31,209,163,.4),0 0 24px rgba(255,138,76,.18),inset 0 0 12px rgba(255,255,255,.3)}
+    to{box-shadow:0 0 24px rgba(31,209,163,.68),0 0 44px rgba(255,138,76,.4),inset 0 0 12px rgba(255,255,255,.4)}}
+  @media (prefers-reduced-motion:reduce){.orb{animation:none}}
+  h1{font-family:var(--font-display);font-optical-sizing:auto;font-weight:900;
+    font-size:clamp(44px,10vw,72px);letter-spacing:-1.5px;line-height:1;margin:0;
+    background:var(--grad);-webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent}
+  p{margin:0;color:var(--muted);max-width:34rem;line-height:1.55}
+  .muted{color:var(--faint);font-size:13px}
+  .btn{display:inline-flex;align-items:center;gap:10px;padding:15px 26px;border-radius:14px;border:0;
+    font:inherit;font-weight:800;cursor:pointer;text-decoration:none;color:#04120e}
   .btn.discord{background:#5865f2;color:#fff}
-  .btn.teal{background:linear-gradient(100deg,var(--teal),#12b48f)}
+  .btn.teal{background:var(--grad);box-shadow:0 10px 30px rgba(31,209,163,.25)}
   .card{width:100%;max-width:640px;display:flex;flex-direction:column;gap:12px}
   .mirror{display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:16px;
-    background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)}
-  .dot{width:11px;height:11px;border-radius:50%;background:#7c8a86;flex:none}
-  .dot.up{background:var(--teal);box-shadow:0 0 10px var(--teal)}
-  .dot.down{background:#e5533d}
+    background:var(--glass);border:1px solid var(--stroke-soft)}
+  .dot{width:11px;height:11px;border-radius:50%;background:var(--faint);flex:none}
+  .dot.up{background:var(--ok);box-shadow:0 0 10px rgba(31,209,163,.7)}
+  .dot.down{background:var(--down)}
   .mirror .name{font-weight:700}
-  .mirror .host{margin-left:auto;color:#8fb3a9;font-size:13px}
-  .mirror a{color:var(--paper);text-decoration:none}
-  .copy{background:rgba(255,255,255,.08);border:0;color:var(--paper);border-radius:9px;padding:8px 10px;cursor:pointer;font:inherit}
+  .mirror .host{margin-left:auto;color:var(--faint);font-size:12px}
+  .mirror a{color:var(--text);text-decoration:none}
+  .copy{background:var(--glass-strong);border:0;color:var(--text);border-radius:9px;padding:8px 12px;cursor:pointer;font:inherit}
   .row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
   .warn{background:rgba(229,83,61,.14);border:1px solid rgba(229,83,61,.4);color:#ffd9cf;
     padding:12px 16px;border-radius:12px;max-width:34rem}
-  a.small{color:#8fb3a9;font-size:13px}
+  a.small{color:var(--faint);font-size:13px}
 `;
 
 function shell(inner) {
@@ -248,7 +267,7 @@ function shell(inner) {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Halcyon — Links</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Hanken+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,900;1,9..144,500&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>${STYLE}</style></head><body>${inner}</body></html>`;
 }
 
