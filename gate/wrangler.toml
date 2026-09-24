@@ -10,7 +10,7 @@ GUILD_ID = "1551410324115169352"
 # role ID to require that people have passed the Verify step. Create the role first,
 # then: Discord (Developer Mode on) -> Server Settings -> Roles -> right-click the
 # Member role -> Copy Role ID.
-MEMBER_ROLE_ID = ""
+MEMBER_ROLE_ID = "1551596393787957317"
 DISCORD_INVITE = "https://discord.gg/n6AJJASUkd"
 # The links, as a JSON array. Quick-start store — edit + `wrangler deploy` to update.
 # (For no-redeploy updates, bind a KV namespace named LINKS instead; see README.)
