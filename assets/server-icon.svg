@@ -1,0 +1,75 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- deep teal-ink backdrop -->
+    <radialGradient id="bg" cx="42%" cy="36%" r="75%">
+      <stop offset="0%" stop-color="#0e2b25"/>
+      <stop offset="55%" stop-color="#081814"/>
+      <stop offset="100%" stop-color="#040d0b"/>
+    </radialGradient>
+
+    <!-- the orb: cream highlight -> teal -> copper rim -->
+    <radialGradient id="orb" cx="37%" cy="33%" r="78%">
+      <stop offset="0%"  stop-color="#f3fffb"/>
+      <stop offset="16%" stop-color="#8ff0d6"/>
+      <stop offset="40%" stop-color="#25d6a8"/>
+      <stop offset="63%" stop-color="#1aa98a"/>
+      <stop offset="82%" stop-color="#ff9a5c"/>
+      <stop offset="100%" stop-color="#d55f31"/>
+    </radialGradient>
+
+    <!-- edge darkening for a 3D sphere feel -->
+    <radialGradient id="rim" cx="50%" cy="50%" r="50%">
+      <stop offset="60%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#00110d" stop-opacity="0.45"/>
+    </radialGradient>
+
+    <!-- teal halo -->
+    <radialGradient id="halo" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"  stop-color="#1fd1a3" stop-opacity="0.55"/>
+      <stop offset="70%" stop-color="#1fd1a3" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#1fd1a3" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+    <filter id="softer" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="22"/>
+    </filter>
+  </defs>
+
+  <!-- background -->
+  <rect width="512" height="512" fill="url(#bg)"/>
+
+  <!-- faint firefly stars -->
+  <g fill="#ffd9b0">
+    <circle cx="98"  cy="120" r="2.4" opacity="0.55"/>
+    <circle cx="420" cy="96"  r="1.8" opacity="0.45"/>
+    <circle cx="440" cy="330" r="2.2" opacity="0.4"/>
+    <circle cx="80"  cy="380" r="1.6" opacity="0.5"/>
+    <circle cx="150" cy="440" r="2"   opacity="0.35"/>
+    <circle cx="370" cy="430" r="1.7" opacity="0.4"/>
+  </g>
+  <g fill="#8ff0d6">
+    <circle cx="410" cy="180" r="1.8" opacity="0.5"/>
+    <circle cx="110" cy="250" r="1.6" opacity="0.45"/>
+    <circle cx="330" cy="70"  r="1.5" opacity="0.4"/>
+  </g>
+
+  <!-- outer glow -->
+  <circle cx="256" cy="256" r="176" fill="url(#halo)" filter="url(#softer)"/>
+
+  <!-- the orb -->
+  <circle cx="256" cy="256" r="150" fill="url(#orb)"/>
+  <circle cx="256" cy="256" r="150" fill="url(#rim)"/>
+
+  <!-- crescent depth shadow, lower-right -->
+  <path d="M256 106 a150 150 0 0 1 0 300 a118 150 0 0 0 0 -300 z"
+        fill="#3a1c10" opacity="0.22" filter="url(#soft)"/>
+
+  <!-- specular highlight, upper-left -->
+  <ellipse cx="205" cy="196" rx="58" ry="34" transform="rotate(-32 205 196)"
+           fill="#ffffff" opacity="0.6" filter="url(#soft)"/>
+  <ellipse cx="192" cy="183" rx="20" ry="12" transform="rotate(-32 192 183)"
+           fill="#ffffff" opacity="0.85"/>
+</svg>
