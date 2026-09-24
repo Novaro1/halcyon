@@ -158,6 +158,14 @@ redeploy. Links are handed out through your Discord.
   network (green/red dot). Host it on a resilient static host (GitHub/Cloudflare
   Pages), **separate from the origin**, keep it unlisted, and share its URL only
   in Discord. See [`hub/README.md`](hub/README.md).
+- **Members-only links (optional)** — [`gate/`](gate/) is a Cloudflare Worker that
+  only reveals the links to people who log in with Discord and are a verified
+  member of your server (Discord OAuth2 + role check). The hub then becomes a
+  login landing and the links move into the gate, so nothing leaks from a public
+  file. See [`gate/README.md`](gate/README.md).
+- **Adding or swapping a domain** — the three places a new mirror has to be
+  registered (afraid.org · `domains.txt` · the gate) are written up in
+  [`docs/adding-a-domain.md`](docs/adding-a-domain.md).
 
 ## Security & privacy — what it does and doesn't protect
 
