@@ -43,8 +43,18 @@
       header { text-align: center; margin-bottom: 30px; }
       .orb {
         width: 60px; height: 60px; border-radius: 50%; margin: 0 auto 18px;
-        background: var(--grad); box-shadow: 0 0 30px rgba(31, 209, 163, 0.5);
+        position: relative; background: var(--grad);
+        animation: orbGlow 5s ease-in-out infinite alternate;
       }
+      .orb::after {
+        content: ""; position: absolute; inset: 22%; border-radius: 50%;
+        background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0) 60%);
+      }
+      @keyframes orbGlow {
+        from { box-shadow: 0 0 14px rgba(31, 209, 163, 0.4), 0 0 24px rgba(255, 138, 76, 0.18), inset 0 0 12px rgba(255, 255, 255, 0.3); }
+        to   { box-shadow: 0 0 24px rgba(31, 209, 163, 0.68), 0 0 44px rgba(255, 138, 76, 0.4), inset 0 0 12px rgba(255, 255, 255, 0.4); }
+      }
+      @media (prefers-reduced-motion: reduce) { .orb { animation: none; } }
       h1 {
         font-family: var(--display); font-weight: 900; font-size: 54px;
         letter-spacing: -1px; margin: 0;
