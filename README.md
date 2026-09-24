@@ -166,6 +166,10 @@ redeploy. Links are handed out through your Discord.
 - **Adding or swapping a domain** — the three places a new mirror has to be
   registered (afraid.org · `domains.txt` · the gate) are written up in
   [`docs/adding-a-domain.md`](docs/adding-a-domain.md).
+- **BYOD (bring your own domain)** — let members add their own domains as mirrors
+  via a `#byod` request flow + a one-command, abuse-guarded approval
+  ([`deploy/add-domain.sh`](deploy/add-domain.sh)). Setup + channel copy in
+  [`docs/byod.md`](docs/byod.md).
 
 ## Security & privacy — what it does and doesn't protect
 
