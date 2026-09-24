@@ -1,7 +1,6 @@
 {
   "discord": "https://discord.gg/n6AJJASUkd",
-  "note": "Bookmark this page — it always lists the current working links.",
-  "mirrors": [
-    { "name": "Halcyon", "url": "https://portal.imaginelearningmath.com", "host": "afraid.org" }
-  ]
+  "gate": "https://halcyon-gate.clarity-hq.workers.dev",
+  "note": "Links are members-only — log in with Discord to reveal them.",
+  "mirrors": []
 }
