@@ -16,3 +16,13 @@ services:
       DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
       HALCYON_PASSPHRASE: ${HALCYON_PASSPHRASE:-}
       LINKS_URL: ${LINKS_URL:-https://novaro1.github.io/halcyon/links.json}
+      # --- /byod command ---
+      MEMBER_ROLE_ID: ${MEMBER_ROLE_ID:-}
+      HALCYON_SERVER_IP: ${HALCYON_SERVER_IP:-}
+      HALCYON_CNAME_TARGET: ${HALCYON_CNAME_TARGET:-vps-aef380a6.vps.ovh.us}
+      HALCYON_DOMAINS_FILE: /data/domains.txt
+      COMMUNITY_LINKS_CHANNEL_ID: ${COMMUNITY_LINKS_CHANNEL_ID:-}
+      BYOD_MAX_PER_DAY: ${BYOD_MAX_PER_DAY:-3}
+    volumes:
+      # the shared allowlist Caddy reads — /byod appends to it (rw)
+      - ../domains.txt:/data/domains.txt

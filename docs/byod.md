@@ -98,6 +98,12 @@ step (adds it to what the hub + `/links` bot hand out to everyone):
 - **Abuse:** `add` only allowlists domains that already point at this server, and
   Caddy's on-demand TLS only issues certs for allowlisted hosts (via `/_tls-check`),
   so BYOD can't be used to mint certs for domains people don't control.
-- **Automating it later:** this is the staff-approved version. A `/byod add
-  <domain>` bot command (verified-member-only, rate-limited, same "must resolve
-  here" check, writing to `domains.txt`) is the natural next step if volume grows.
+- **Self-serve `/byod add` (built):** the bot now has a **`/byod add domain:…`**
+  slash command that does this automatically — verified-member-only, rate-limited
+  (`BYOD_MAX_PER_DAY`, default 3/user/day), with the same "must already resolve to
+  this server" guard, appending straight to `domains.txt`. The staff `add-domain.sh`
+  flow above still works as a fallback / for domains that aren't points-here yet.
+  The bot needs `MEMBER_ROLE_ID`, `HALCYON_SERVER_IP`, and the `../domains.txt`
+  volume (rw) — see `bot/.env.example` and `bot/docker-compose.yml`. An optional
+  `share:true` also announces the domain in `#community-links`
+  (`COMMUNITY_LINKS_CHANNEL_ID`).
