@@ -44,7 +44,10 @@ case "$cmd" in
     d="$(normalize "$arg")"
     [ -n "$d" ] || { echo "usage: $0 remove <domain>"; exit 1; }
     if grep -qxF "$d" "$DOMAINS_FILE"; then
-      grep -vxF "$d" "$DOMAINS_FILE" > "$DOMAINS_FILE.tmp" && mv "$DOMAINS_FILE.tmp" "$DOMAINS_FILE"
+      # Truncate-in-place (NOT mv) so the file keeps its inode — a single-file
+      # Docker bind mount doesn't follow an inode swap, which would freeze the
+      # container on a stale allowlist until it's recreated.
+      kept="$(grep -vxF "$d" "$DOMAINS_FILE")"; printf '%s\n' "$kept" > "$DOMAINS_FILE"
       echo "✓ Removed $d — Caddy stops serving it within ~10s."
     else
       echo "· $d is not in the allowlist."
