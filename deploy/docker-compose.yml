@@ -30,6 +30,10 @@ services:
     restart: unless-stopped
     depends_on:
       - halcyon
+    environment:
+      # ZeroSSL fallback CA key (free ZeroSSL account → Developer → API key).
+      # Set it in deploy/.env. Leave unset and Caddy uses Let's Encrypt only.
+      ZEROSSL_API_KEY: ${ZEROSSL_API_KEY:-}
     ports:
       - "80:80"
       - "443:443"

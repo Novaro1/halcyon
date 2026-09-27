@@ -26,6 +26,14 @@
 :443 {
 	tls {
 		on_demand
+
+		# Try Let's Encrypt first, then fall back to ZeroSSL when LE rate-limits a
+		# shared domain (its 50-certs/week/registered-domain cap, which popular
+		# afraid.org domains are always hitting). ZeroSSL needs ZEROSSL_API_KEY in
+		# deploy/.env — a free ZeroSSL account → Developer → API key. Don't reload
+		# Caddy with this line present until that key is set (an empty key is invalid).
+		issuer acme
+		issuer zerossl {$ZEROSSL_API_KEY}
 	}
 
 	# Never expose the internal allowlist check to the public.
