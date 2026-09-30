@@ -5,6 +5,12 @@
 //   /status      → live reachability check of each domain
 //   /byod add    → a verified member turns a domain THEY own into a Halcyon mirror
 //
+// It also runs an auto-updating #status board (STATUS_CHANNEL_ID) with a
+// "Check a link" button → a modal where anyone pastes a URL and privately gets back
+// whether it's a live Halcyon mirror, or whether an arbitrary site works through
+// Halcyon (best-effort: reachability + a known-incompatible list). The checker has
+// an SSRF guard so it can't be used to probe the server's internal network.
+//
 // /byod is the automated version of the staff `deploy/add-domain.sh` flow: it only
 // works for verified members, only accepts a domain that ALREADY resolves to this
 // server (so nobody can allowlist a domain they don't control), is rate-limited per
@@ -18,6 +24,12 @@ import {
   SlashCommandBuilder,
   EmbedBuilder,
   MessageFlags,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
 } from "discord.js";
 import { resolve4 } from "node:dns/promises";
 import { readFile, appendFile } from "node:fs/promises";
@@ -37,6 +49,19 @@ const CNAME_TARGET = process.env.HALCYON_CNAME_TARGET || "vps-aef380a6.vps.ovh.u
 const COMMUNITY_CH = process.env.COMMUNITY_LINKS_CHANNEL_ID || "";  // optional
 const MAX_PER_DAY = Number(process.env.BYOD_MAX_PER_DAY || 3);
 let SERVER_IP = process.env.HALCYON_SERVER_IP || "";
+
+// --- #status board + link checker ---
+const STATUS_CHANNEL_ID = process.env.STATUS_CHANNEL_ID || "";
+const STATUS_INTERVAL_MIN = Number(process.env.STATUS_INTERVAL_MIN || 5);
+const GATE_URL =
+  process.env.HALCYON_GATE_URL ||
+  (() => { try { return new URL(LINKS_URL).origin; } catch { return ""; } })();
+// Sites known to not (fully) work through the Scramjet proxy.
+const KNOWN_BROKEN = [
+  { rx: /(^|\.)youtube\.com$/, note: "YouTube video playback is unreliable through the proxy (SABR streaming)" },
+  { rx: /(^|\.)youtu\.be$/, note: "YouTube video playback is unreliable through the proxy (SABR streaming)" },
+  { rx: /(^|\.)googlevideo\.com$/, note: "YouTube's video CDN doesn't play through the proxy" },
+];
 
 if (!TOKEN || !CLIENT_ID) {
   console.error("Missing DISCORD_TOKEN and/or DISCORD_CLIENT_ID — see bot/README.md");
@@ -228,6 +253,150 @@ async function handleByodAdd(i) {
   return i.editReply(msg);
 }
 
+// -------------------------------------------------------- link checker + status ---
+
+function isPrivateIp(ip) {
+  const p = ip.split(".").map(Number);
+  if (p.length !== 4 || p.some((n) => Number.isNaN(n))) return true; // unparseable = treat as unsafe
+  return (
+    p[0] === 0 || p[0] === 10 || p[0] === 127 ||
+    (p[0] === 172 && p[1] >= 16 && p[1] <= 31) ||
+    (p[0] === 169 && p[1] === 254) ||
+    (p[0] === 192 && p[1] === 168) ||
+    p[0] >= 224 // multicast / reserved
+  );
+}
+
+// Guard so the checker can't be used to probe internal / cloud-metadata addresses.
+async function resolvesToPrivate(host) {
+  const literal = /^\d+\.\d+\.\d+\.\d+$/.test(host);
+  const ips = literal ? [host] : await resolve4(host).catch(() => []);
+  return ips.length > 0 && ips.some(isPrivateIp);
+}
+
+// Combined: is this one of OUR mirrors (uptime), or does an arbitrary site work?
+async function checkLink(raw) {
+  const t = String(raw || "").trim();
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(t) && !/^https?:\/\//i.test(t)) {
+    return "❌ I can only check http/https links.";
+  }
+  let url;
+  try {
+    url = new URL(/^https?:\/\//i.test(t) ? t : "https://" + t);
+  } catch {
+    return "❌ That doesn't look like a valid link. Try something like `https://example.com`.";
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return "❌ I can only check http/https links.";
+  }
+  const host = url.hostname.toLowerCase();
+  if (
+    host === "localhost" || host.endsWith(".local") || host.endsWith(".internal") ||
+    (await resolvesToPrivate(host))
+  ) {
+    return "❌ I can't check internal or private addresses.";
+  }
+
+  const mirrors = await fetchMirrors();
+  const mirrorHosts = new Set(
+    mirrors.map((m) => { try { return new URL(m.url).hostname.toLowerCase(); } catch { return ""; } })
+  );
+
+  // (a) One of our mirrors → uptime.
+  if (mirrorHosts.has(host)) {
+    const up = await ping("https://" + host + "/");
+    return up
+      ? `🟢 **${host}** is an official Halcyon mirror and it's **up** — open it and log in as usual.`
+      : `🔴 **${host}** is an official Halcyon mirror but it's **not responding right now**. Try another from **/links**.`;
+  }
+
+  // (b) Any other site → reachability + known-incompatibility hint.
+  const reachable = await ping(url.href);
+  if (!reachable) {
+    return `🔴 **${host}** looks **down or unreachable** right now — Halcyon can only open sites that are actually online.`;
+  }
+  const broken = KNOWN_BROKEN.find((b) => b.rx.test(host));
+  if (broken) {
+    return `⚠️ **${host}** is online, but it's **known to have issues** through Halcyon — ${broken.note}. You can try it, but it may not fully work.`;
+  }
+  return `✅ **${host}** is online and should **work through Halcyon**. Open a mirror from **/links**, log in, and paste the link into the address bar.`;
+}
+
+function buildCheckModal() {
+  return new ModalBuilder()
+    .setCustomId("halcyon_check_modal")
+    .setTitle("Check a link")
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("url")
+          .setLabel("Paste a link (a Halcyon mirror or any site)")
+          .setPlaceholder("https://example.com")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+          .setMaxLength(300)
+      )
+    );
+}
+
+async function handleCheckSubmit(i) {
+  await i.deferReply({ flags: MessageFlags.Ephemeral });
+  const result = await checkLink(i.fields.getTextInputValue("url"));
+  await i.editReply(result);
+}
+
+// The auto-updating #status board, with the Check-a-link button.
+let statusMessage = null;
+
+async function buildStatusPayload() {
+  const mirrors = await fetchMirrors();
+  const ups = await Promise.all(mirrors.map((m) => ping(m.url)));
+  const upCount = ups.filter(Boolean).length;
+  const gateUp = GATE_URL ? await ping(GATE_URL) : null;
+  const allGood = mirrors.length > 0 && upCount === mirrors.length && gateUp !== false;
+
+  const header = allGood
+    ? "🟢 **All systems operational**"
+    : mirrors.length === 0
+    ? "⚪ **No mirrors configured**"
+    : `🟠 **${upCount}/${mirrors.length} mirrors online**` + (gateUp === false ? " · login gate issue" : "");
+
+  const content =
+    "## 🌿 Halcyon — Status\n" +
+    `${header} · updated <t:${Math.floor(Date.now() / 1000)}:R>\n\n` +
+    "Not sure if a link works? Click **Check a link** and paste it — I'll tell you if it's a live Halcyon " +
+    "mirror, or whether a site works through Halcyon. Only you see the result.";
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("halcyon_check").setEmoji("🔎").setLabel("Check a link").setStyle(ButtonStyle.Primary)
+  );
+  return { content, components: [row] };
+}
+
+async function ensureStatusMessage() {
+  if (!STATUS_CHANNEL_ID) return;
+  const ch = await client.channels.fetch(STATUS_CHANNEL_ID).catch(() => null);
+  if (!ch || !ch.isTextBased?.()) {
+    return console.error("[status] channel missing or not text — check STATUS_CHANNEL_ID + bot access");
+  }
+  const payload = await buildStatusPayload();
+  try {
+    const recent = await ch.messages.fetch({ limit: 25 });
+    statusMessage = recent.find((m) => m.author.id === client.user.id && m.components?.length) || null;
+  } catch { /* no read history — just post a fresh one */ }
+  if (statusMessage) {
+    await statusMessage.edit(payload).catch(async () => { statusMessage = await ch.send(payload); });
+  } else {
+    statusMessage = await ch.send(payload).catch((e) => { console.error("[status] post failed:", e.message); return null; });
+  }
+  if (statusMessage) console.log(`[status] board live in #${ch.name}`);
+}
+
+async function refreshStatus() {
+  if (!statusMessage) return ensureStatusMessage();
+  await statusMessage.edit(await buildStatusPayload()).catch(() => {});
+}
+
 // ------------------------------------------------------------------ commands ---
 
 const commands = [
@@ -266,17 +435,30 @@ async function registerCommands() {
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-client.once("ready", () => {
+client.once("ready", async () => {
   console.log(`Halcyon bot online as ${client.user.tag}`);
   console.log(
     `BYOD: ${MEMBER_ROLE_ID ? "verified-member-gated" : "any member"}, ` +
       `server IP ${SERVER_IP || "(unknown)"}, ${MAX_PER_DAY}/user/day → ${DOMAINS_FILE}`
   );
+  if (STATUS_CHANNEL_ID) {
+    await ensureStatusMessage();
+    setInterval(() => refreshStatus().catch(() => {}), Math.max(1, STATUS_INTERVAL_MIN) * 60000);
+  } else {
+    console.log("[status] STATUS_CHANNEL_ID not set — status board + checker disabled");
+  }
 });
 
 client.on("interactionCreate", async (i) => {
-  if (!i.isChatInputCommand()) return;
   try {
+    if (i.isButton() && i.customId === "halcyon_check") {
+      return i.showModal(buildCheckModal());
+    }
+    if (i.isModalSubmit() && i.customId === "halcyon_check_modal") {
+      return handleCheckSubmit(i);
+    }
+    if (!i.isChatInputCommand()) return;
+
     if (i.commandName === "links") {
       const mirrors = await fetchMirrors();
       const list = mirrors.length

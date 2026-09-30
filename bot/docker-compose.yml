@@ -23,6 +23,10 @@ services:
       HALCYON_DOMAINS_FILE: /data/domains.txt
       COMMUNITY_LINKS_CHANNEL_ID: ${COMMUNITY_LINKS_CHANNEL_ID:-}
       BYOD_MAX_PER_DAY: ${BYOD_MAX_PER_DAY:-3}
+      # --- #status board + "Check a link" button ---
+      STATUS_CHANNEL_ID: ${STATUS_CHANNEL_ID:-}
+      STATUS_INTERVAL_MIN: ${STATUS_INTERVAL_MIN:-5}
+      HALCYON_GATE_URL: ${HALCYON_GATE_URL:-}
     volumes:
       # the shared allowlist Caddy reads — /byod appends to it (rw)
       - ../domains.txt:/data/domains.txt
