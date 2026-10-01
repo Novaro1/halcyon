@@ -113,7 +113,11 @@
       close.addEventListener("click", (e) => {
         e.stopPropagation();
         Halcyon.closeTab(t.id);
-        if (!Halcyon.tabsState().tabs.length) show("home");
+        // Follow the new active tab: show its page, or home if it's a fresh
+        // tab (or there are none left).
+        const st = Halcyon.tabsState();
+        const act = st.tabs.find((x) => x.active);
+        show(act && act.url ? "proxy" : "home");
       });
       chip.append(title, close);
       chip.addEventListener("click", () => {
@@ -177,7 +181,10 @@
   $("#tb-back").addEventListener("click", () => Halcyon.back());
   $("#tb-forward").addEventListener("click", () => Halcyon.forward());
   $("#tb-reload").addEventListener("click", () => Halcyon.reload());
-  $("#tb-home").addEventListener("click", () => show("home"));
+  $("#tb-home").addEventListener("click", () => {
+    Halcyon.goHome();
+    show("home");
+  });
   $("#tb-newtab").addEventListener("click", () => {
     if (lastActiveUrl) window.open(lastActiveUrl, "_blank");
   });
@@ -361,6 +368,8 @@
   const engineSel = $("#set-engine");
   const wispIn = $("#set-wisp");
   const cloakTitle = $("#set-cloak-title");
+  const cloakIcon = $("#set-cloak-icon");
+  const cloakPreset = $("#set-cloak-preset");
   const aboutBlank = $("#set-aboutblank");
   const panicUrl = $("#set-panic-url");
 
@@ -420,6 +429,7 @@
   engineSel.value = store.get("engine", "https://www.google.com/search?q=%s");
   wispIn.value = store.get("wisp", "");
   cloakTitle.value = store.get("cloakTitle", "");
+  cloakIcon.value = store.get("cloakIcon", "");
   aboutBlank.checked = store.get("aboutblank", "0") === "1";
   panicUrl.value = store.get("panicUrl", "https://classroom.google.com");
 
@@ -434,26 +444,88 @@
     if (aboutBlank.checked) openInAboutBlank();
   });
 
-  // ---- Tab cloak ----
+  // ---- Tab cloak (presets + custom title & favicon) ----
+  const CLOAK_PRESETS = [
+    { name: "Google Classroom", title: "Home", icon: "classroom.google.com" },
+    { name: "Google Docs", title: "Google Docs", icon: "docs.google.com" },
+    { name: "Google Drive", title: "My Drive - Google Drive", icon: "drive.google.com" },
+    { name: "Google Slides", title: "Google Slides", icon: "slides.google.com" },
+    { name: "Google Sheets", title: "Google Sheets", icon: "sheets.google.com" },
+    { name: "Gmail", title: "Inbox", icon: "mail.google.com" },
+    { name: "Google", title: "Google", icon: "google.com" },
+    { name: "Canvas", title: "Dashboard", icon: "instructure.com" },
+    { name: "Schoology", title: "Home | Schoology", icon: "schoology.com" },
+    { name: "Clever", title: "Clever | Portal", icon: "clever.com" },
+    { name: "Khan Academy", title: "Dashboard | Khan Academy", icon: "khanacademy.org" },
+    { name: "Desmos", title: "Desmos | Scientific Calculator", icon: "desmos.com" },
+    { name: "Wikipedia", title: "Wikipedia, the free encyclopedia", icon: "wikipedia.org" },
+  ];
+  CLOAK_PRESETS.forEach((p, i) => {
+    const o = document.createElement("option");
+    o.value = String(i);
+    o.textContent = p.name;
+    cloakPreset.appendChild(o);
+  });
+
+  // Plain document glyph used when a title is cloaked but no icon is chosen.
+  const NEUTRAL_FAVICON =
+    "data:image/svg+xml," +
+    encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" rx="4" fill="%23fff"/><path d="M7 4h7l4 4v12H7z" fill="%23ccc"/></svg>'
+    );
+
+  // Resolve an icon value to a favicon href: a direct image/data URL is used as
+  // is; anything else is treated as a site and resolved via Google's favicon
+  // service (so any domain works without us shipping the image).
+  function faviconFor(v) {
+    v = (v || "").trim();
+    if (!v) return "";
+    if (/^data:/i.test(v)) return v;
+    if (/^https?:\/\/\S+\.(png|ico|svg|jpe?g|gif|webp)(\?\S*)?$/i.test(v)) return v;
+    const domain = v.replace(/^https?:\/\//i, "").replace(/\/.*$/, "").trim();
+    return "https://www.google.com/s2/favicons?sz=64&domain=" + encodeURIComponent(domain);
+  }
+
   function applyCloak() {
     const t = store.get("cloakTitle", "").trim();
+    const ic = store.get("cloakIcon", "").trim();
     document.title = t || "Halcyon";
     const fav = document.querySelector("link[rel=icon]");
-    if (t) {
-      // Neutral favicon (a document glyph) when cloaked.
-      fav.href =
-        "data:image/svg+xml," +
-        encodeURIComponent(
-          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" rx="4" fill="%23fff"/><path d="M7 4h7l4 4v12H7z" fill="%23ccc"/></svg>'
-        );
-    } else {
-      fav.href = "/assets/icon.svg";
-    }
+    if (!fav) return;
+    if (ic) fav.href = faviconFor(ic);
+    else if (t) fav.href = NEUTRAL_FAVICON;
+    else fav.href = "/assets/icon.svg";
   }
-  cloakTitle.addEventListener("input", () => {
-    cloakTitle.value.trim() ? store.set("cloakTitle", cloakTitle.value) : store.del("cloakTitle");
+
+  // Keep the preset dropdown reflecting the current fields (→ "Custom…" once the
+  // user edits either one away from a preset).
+  function syncCloakPreset() {
+    const t = cloakTitle.value.trim();
+    const ic = cloakIcon.value.trim();
+    const idx = CLOAK_PRESETS.findIndex((p) => p.title === t && p.icon === ic);
+    cloakPreset.value = idx >= 0 ? String(idx) : "";
+  }
+
+  cloakPreset.addEventListener("change", () => {
+    if (cloakPreset.value === "") return; // "Custom…" — leave the fields alone
+    const p = CLOAK_PRESETS[+cloakPreset.value];
+    cloakTitle.value = p.title;
+    cloakIcon.value = p.icon;
+    store.set("cloakTitle", p.title);
+    store.set("cloakIcon", p.icon);
     applyCloak();
   });
+  cloakTitle.addEventListener("input", () => {
+    cloakTitle.value.trim() ? store.set("cloakTitle", cloakTitle.value) : store.del("cloakTitle");
+    syncCloakPreset();
+    applyCloak();
+  });
+  cloakIcon.addEventListener("input", () => {
+    cloakIcon.value.trim() ? store.set("cloakIcon", cloakIcon.value) : store.del("cloakIcon");
+    syncCloakPreset();
+    applyCloak();
+  });
+  syncCloakPreset();
   applyCloak();
 
   // ---- about:blank cloak ----

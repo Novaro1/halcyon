@@ -127,6 +127,10 @@ input, select { font-family: inherit; }
 /* ---------------- Dock ---------------- */
 .dock {
   flex: 0 0 auto;
+  /* Sit above .main so the nav tooltips, which overflow the dock to the right,
+     render over the proxy iframe instead of being clipped behind it. */
+  position: relative;
+  z-index: 10;
   width: 66px;
   display: flex;
   flex-direction: column;
@@ -198,6 +202,9 @@ input, select { font-family: inherit; }
 /* ---------------- Main / views ---------------- */
 .main {
   position: relative;
+  /* Own stacking context below the dock (z-index:10) so the proxy iframe and
+     its descendants can't paint over the dock's hover tooltips. */
+  z-index: 1;
   flex: 1;
   border-radius: 26px;
   overflow: hidden;
@@ -482,6 +489,34 @@ input, select { font-family: inherit; }
 }
 .wipe-btn:hover { background: rgba(255, 90, 90, 0.18); }
 .wipe-btn:active { transform: scale(0.97); }
+
+.credits > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.credits > summary::-webkit-details-marker { display: none; }
+.credits .credits-chevron {
+  display: inline-block;
+  color: var(--teal);
+  transition: transform 0.2s var(--ease);
+}
+.credits[open] .credits-chevron { transform: rotate(90deg); }
+.credit-list {
+  margin: 14px 0 2px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.credit-list a { color: var(--teal); text-decoration: none; font-weight: 600; }
+.credit-list a:hover { color: var(--teal-bright); text-decoration: underline; }
 
 .toggle-field { flex-direction: row; align-items: center; justify-content: space-between; gap: 20px; cursor: pointer; }
 .toggle-field > div { display: flex; flex-direction: column; gap: 5px; }

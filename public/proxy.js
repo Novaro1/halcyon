@@ -451,17 +451,26 @@
     closeTab(id) {
       const tab = tabs.get(id);
       if (!tab) return;
-      try {
-        tab.frame?.destroy?.();
-      } catch {}
-      if (tab.iframe) tab.iframe.remove();
-      tabs.delete(id);
       if (activeTabId === id) {
-        const rest = [...tabs.keys()];
+        const rest = [...tabs.keys()].filter((k) => k !== id);
         activeTabId = rest.length ? rest[rest.length - 1] : null;
       }
+      // Hide the closing frame the way a tab-switch does (display:none, which
+      // discards its layer cleanly) and reveal the new active frame BEFORE
+      // removing the closing one from the DOM. Removing a still-visible iframe
+      // synchronously leaves its stale compositor layer ghosting over the
+      // newly-revealed tab for a frame — that's the "it keeps showing the page
+      // I was on" glitch.
+      if (tab.iframe) tab.iframe.style.display = "none";
+      tabs.delete(id);
       showActiveIframe();
       notifyTabs();
+      requestAnimationFrame(() => {
+        try {
+          tab.frame?.destroy?.();
+        } catch {}
+        tab.iframe?.remove();
+      });
     },
     /** Subscribe to tab-state changes; fires immediately with current state. */
     onTabs(fn) {
@@ -484,6 +493,23 @@
         notifyTabs();
         t.frame.reload();
       }
+    },
+    /** Send the active tab back to the Halcyon home — a fresh "New Tab" state.
+     *  Like a browser's home button: the current page is unloaded and the next
+     *  search navigates this same tab (so the tab chip matches the home view
+     *  instead of staying stuck on the old site). */
+    goHome() {
+      const tab = tabs.get(activeTabId);
+      if (!tab) return;
+      try {
+        tab.frame?.destroy?.();
+      } catch {}
+      tab.iframe?.remove();
+      tab.frame = tab.iframe = tab.win = null;
+      tab.url = "";
+      tab.title = "New Tab";
+      tab.loading = false;
+      notifyTabs();
     },
     /** Remove modal overlays + restore scroll in the active tab. Returns count. */
     removeOverlay() {
