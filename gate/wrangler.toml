@@ -14,7 +14,7 @@ MEMBER_ROLE_ID = "1551596393787957317"
 DISCORD_INVITE = "https://discord.gg/n6AJJASUkd"
 # The links, as a JSON array. Quick-start store — edit + `wrangler deploy` to update.
 # (For no-redeploy updates, bind a KV namespace named LINKS instead; see README.)
-LINKS_JSON = '[{"url":"https://portal.infocommthailand.com","host":"infocommthailand.com"},{"url":"https://study.grupompr.com","host":"grupompr.com"},{"url":"https://learn.megaingenieria.com","host":"megaingenieria.com"},{"url":"https://student.crabdance.com","host":"crabdance.com"},{"url":"https://studyhall.ignorelist.com","host":"ignorelist.com"},{"url":"https://coursework.jumpingcrab.com","host":"jumpingcrab.com"},{"url":"https://readingroom.strangled.net","host":"strangled.net"},{"url":"https://learnspace.twilightparadox.com","host":"twilightparadox.com"}]'
+LINKS_JSON = '[{"url":"https://portal.infocommthailand.com","host":"infocommthailand.com"},{"url":"https://study.grupompr.com","host":"grupompr.com"},{"url":"https://learn.megaingenieria.com","host":"megaingenieria.com"},{"url":"https://studyhub.polytama.com","host":"polytama.com"},{"url":"https://student.crabdance.com","host":"crabdance.com"},{"url":"https://studyhall.ignorelist.com","host":"ignorelist.com"},{"url":"https://coursework.jumpingcrab.com","host":"jumpingcrab.com"},{"url":"https://readingroom.strangled.net","host":"strangled.net"},{"url":"https://learnspace.twilightparadox.com","host":"twilightparadox.com"}]'
 
 # ---- Secrets (do NOT put here — set with `wrangler secret put NAME`) -------
 #   DISCORD_CLIENT_SECRET   Discord Developer Portal -> your app -> OAuth2 -> Reset Secret
