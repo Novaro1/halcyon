@@ -27,6 +27,10 @@ services:
       STATUS_CHANNEL_ID: ${STATUS_CHANNEL_ID:-}
       STATUS_INTERVAL_MIN: ${STATUS_INTERVAL_MIN:-5}
       HALCYON_GATE_URL: ${HALCYON_GATE_URL:-}
+      # --- status outage alerts (ops channel) ---
+      STATUS_ALERT_CHANNEL_ID: ${STATUS_ALERT_CHANNEL_ID:-}
+      STATUS_ALERT_ROLE_ID: ${STATUS_ALERT_ROLE_ID:-}
+      STATUS_CONFIRM_THRESHOLD: ${STATUS_CONFIRM_THRESHOLD:-2}
     volumes:
       # the shared allowlist Caddy reads — /byod appends to it (rw)
       - ../domains.txt:/data/domains.txt

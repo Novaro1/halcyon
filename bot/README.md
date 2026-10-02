@@ -7,10 +7,31 @@ uses**, so whenever you update your links the bot serves them automatically.
 Commands (both reply **privately** to whoever runs them):
 
 - **`/links`** — the current working domains + the access passphrase.
-- **`/status`** — a live 🟢/🔴 reachability check of each domain.
+- **`/status`** — a live health check of each domain (🟢 up / 🟠 degraded / 🔴 down, with the reason).
 
 The passphrase is a bot secret (`HALCYON_PASSPHRASE`), never in the public
 `links.json` — so only people in your server who run `/links` ever see it.
+
+## Status board + outage alerts
+
+Set `STATUS_CHANNEL_ID` and the bot keeps one auto-updating board message in that
+channel with an "All systems operational / N of M healthy" summary and a
+**Check a link** button.
+
+The health check is a real one, not a bare ping: it requests each mirror like a
+browser (`/` → `/login`) and only counts it **up** if it gets back the actual
+Halcyon passphrase page. A Caddy `502`, a parked domain, a cert error, or a
+school-filter block page all answer with *something*, so a plain ping would show
+them green — here they're classified **degraded** (reachable, but not serving
+Halcyon) or **down** (unreachable), and never counted as healthy.
+
+For outage notifications, also set `STATUS_ALERT_CHANNEL_ID` (and optionally
+`STATUS_ALERT_ROLE_ID`). The bot posts to that ops channel **only when a mirror's
+health changes** — e.g. `🔴 `student.crabdance.com` went DOWN — no response in 8s`
+— so staff hear about an outage without watching #status. A new state must hold
+for `STATUS_CONFIRM_THRESHOLD` polls in a row (default 2) before it alerts, which
+absorbs the transient blips free-DNS hosts and filters are prone to. Recoveries
+are posted too, but never @mention the role.
 
 ## 1. Create the bot (Discord Developer Portal)
 

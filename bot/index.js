@@ -33,6 +33,7 @@ import {
 } from "discord.js";
 import { resolve4 } from "node:dns/promises";
 import { readFile, appendFile } from "node:fs/promises";
+import { probe, StatusMonitor, formatAlert, STATE_EMOJI, UP, DEGRADED, DOWN } from "./health.js";
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
@@ -53,6 +54,13 @@ let SERVER_IP = process.env.HALCYON_SERVER_IP || "";
 // --- #status board + link checker ---
 const STATUS_CHANNEL_ID = process.env.STATUS_CHANNEL_ID || "";
 const STATUS_INTERVAL_MIN = Number(process.env.STATUS_INTERVAL_MIN || 5);
+// Optional ops channel: the bot posts here only when a mirror's health CHANGES
+// (up↔degraded↔down), so staff hear about outages without watching #status.
+const STATUS_ALERT_CHANNEL_ID = process.env.STATUS_ALERT_CHANNEL_ID || "";
+// Optional role to @mention on an outage (not on recovery). Blank = no ping.
+const STATUS_ALERT_ROLE_ID = process.env.STATUS_ALERT_ROLE_ID || "";
+// How many polls in a row a new state must hold before it's alerted (anti-flap).
+const STATUS_CONFIRM = Number(process.env.STATUS_CONFIRM_THRESHOLD || 2);
 const GATE_URL =
   process.env.HALCYON_GATE_URL ||
   (() => { try { return new URL(LINKS_URL).origin; } catch { return ""; } })();
@@ -302,12 +310,17 @@ async function checkLink(raw) {
     mirrors.map((m) => { try { return new URL(m.url).hostname.toLowerCase(); } catch { return ""; } })
   );
 
-  // (a) One of our mirrors → uptime.
+  // (a) One of our mirrors → real health (serving the Halcyon page, not just
+  // answering with some error/parked/block page).
   if (mirrorHosts.has(host)) {
-    const up = await ping("https://" + host + "/");
-    return up
-      ? `🟢 **${host}** is an official Halcyon mirror and it's **up** — open it and log in as usual.`
-      : `🔴 **${host}** is an official Halcyon mirror but it's **not responding right now**. Try another from **/links**.`;
+    const r = await probe("https://" + host + "/");
+    if (r.state === UP) {
+      return `🟢 **${host}** is an official Halcyon mirror and it's **up** — open it and log in as usual.`;
+    }
+    if (r.state === DEGRADED) {
+      return `🟠 **${host}** is an official Halcyon mirror but it's **having trouble** right now (${r.reason}). Try another from **/links**.`;
+    }
+    return `🔴 **${host}** is an official Halcyon mirror but it's **not responding right now**. Try another from **/links**.`;
   }
 
   // (b) Any other site → reachability + known-incompatibility hint.
@@ -347,19 +360,43 @@ async function handleCheckSubmit(i) {
 
 // The auto-updating #status board, with the Check-a-link button.
 let statusMessage = null;
+const monitor = new StatusMonitor({ confirmThreshold: STATUS_CONFIRM });
 
-async function buildStatusPayload() {
+function hostLabel(url) {
+  try { return new URL(url).hostname; } catch { return url; }
+}
+
+// One probe sweep of everything we watch — each mirror gets the deep Halcyon
+// health check; the login gate gets a plain reachability ping (it's not a
+// Halcyon app, so there's no page signature to match). We hit the network once
+// per cycle and hand the same results to both the board and the alerter.
+async function probeAll() {
   const mirrors = await fetchMirrors();
-  const ups = await Promise.all(mirrors.map((m) => ping(m.url)));
-  const upCount = ups.filter(Boolean).length;
-  const gateUp = GATE_URL ? await ping(GATE_URL) : null;
-  const allGood = mirrors.length > 0 && upCount === mirrors.length && gateUp !== false;
+  const results = await Promise.all(mirrors.map((m) => probe(m.url)));
+  let gate = null;
+  if (GATE_URL) {
+    const up = await ping(GATE_URL);
+    gate = { url: GATE_URL, state: up ? UP : DOWN, reason: up ? "ok" : "unreachable", gate: true };
+  }
+  return { results, gate };
+}
 
-  const header = allGood
-    ? "🟢 **All systems operational**"
-    : mirrors.length === 0
-    ? "⚪ **No mirrors configured**"
-    : `🟠 **${upCount}/${mirrors.length} mirrors online**` + (gateUp === false ? " · login gate issue" : "");
+// Public board content — an honest summary. A mirror counts as healthy only if
+// it's actually serving the Halcyon page; per-host detail is kept for the ops
+// channel rather than shown to everyone.
+function statusPayload({ results, gate }) {
+  const total = results.length;
+  const up = results.filter((r) => r.state === UP).length;
+  const gateBad = gate && gate.state !== UP;
+
+  const header =
+    total === 0
+      ? "⚪ **No mirrors configured**"
+      : up === total && !gateBad
+      ? "🟢 **All systems operational**"
+      : up === 0
+      ? "🔴 **All mirrors are having trouble**" + (gateBad ? " · login gate issue" : "")
+      : `🟠 **${up}/${total} mirrors healthy**` + (gateBad ? " · login gate issue" : "");
 
   const content =
     "## 🌿 Halcyon — Status\n" +
@@ -373,13 +410,13 @@ async function buildStatusPayload() {
   return { content, components: [row] };
 }
 
-async function ensureStatusMessage() {
+async function ensureStatusMessage(payload) {
   if (!STATUS_CHANNEL_ID) return;
   const ch = await client.channels.fetch(STATUS_CHANNEL_ID).catch(() => null);
   if (!ch || !ch.isTextBased?.()) {
     return console.error("[status] channel missing or not text — check STATUS_CHANNEL_ID + bot access");
   }
-  const payload = await buildStatusPayload();
+  if (!payload) payload = statusPayload(await probeAll());
   try {
     const recent = await ch.messages.fetch({ limit: 25 });
     statusMessage = recent.find((m) => m.author.id === client.user.id && m.components?.length) || null;
@@ -392,9 +429,36 @@ async function ensureStatusMessage() {
   if (statusMessage) console.log(`[status] board live in #${ch.name}`);
 }
 
-async function refreshStatus() {
-  if (!statusMessage) return ensureStatusMessage();
-  await statusMessage.edit(await buildStatusPayload()).catch(() => {});
+// Fire a line in the ops channel for each CONFIRMED health change. Outages
+// (down/degraded) optionally @mention the alert role; recoveries never ping.
+async function postAlerts(transitions) {
+  if (!STATUS_ALERT_CHANNEL_ID || !transitions.length) return;
+  const ch = await client.channels.fetch(STATUS_ALERT_CHANNEL_ID).catch(() => null);
+  if (!ch || !ch.isTextBased?.()) {
+    return console.error("[status] alert channel missing/not text — check STATUS_ALERT_CHANNEL_ID + bot access");
+  }
+  for (const t of transitions) {
+    const label = t.result.gate ? "login gate" : hostLabel(t.key);
+    const line = formatAlert(t, { label, roleId: STATUS_ALERT_ROLE_ID });
+    await ch.send(line).catch((e) => console.error("[status] alert send failed:", e.message));
+  }
+}
+
+// One full cycle: probe everything, refresh the board, then detect + alert on
+// confirmed state changes.
+async function pollCycle() {
+  if (!STATUS_CHANNEL_ID) return;
+  const snap = await probeAll();
+  const payload = statusPayload(snap);
+  if (!statusMessage) await ensureStatusMessage(payload);
+  else await statusMessage.edit(payload).catch(async () => { statusMessage = null; await ensureStatusMessage(payload); });
+
+  const all = [...snap.results, ...(snap.gate ? [snap.gate] : [])];
+  const transitions = monitor.update(all);
+  if (transitions.length) {
+    console.log("[status] " + transitions.map((t) => `${hostLabel(t.key)} ${t.from}→${t.to}`).join(", "));
+    await postAlerts(transitions);
+  }
 }
 
 // ------------------------------------------------------------------ commands ---
@@ -442,8 +506,12 @@ client.once("ready", async () => {
       `server IP ${SERVER_IP || "(unknown)"}, ${MAX_PER_DAY}/user/day → ${DOMAINS_FILE}`
   );
   if (STATUS_CHANNEL_ID) {
-    await ensureStatusMessage();
-    setInterval(() => refreshStatus().catch(() => {}), Math.max(1, STATUS_INTERVAL_MIN) * 60000);
+    await pollCycle().catch((e) => console.error("[status] first poll failed:", e.message));
+    setInterval(() => pollCycle().catch(() => {}), Math.max(1, STATUS_INTERVAL_MIN) * 60000);
+    console.log(
+      `[status] polling every ${STATUS_INTERVAL_MIN}m, confirm=${STATUS_CONFIRM}, ` +
+        (STATUS_ALERT_CHANNEL_ID ? `alerts → channel ${STATUS_ALERT_CHANNEL_ID}` : "alerts off (set STATUS_ALERT_CHANNEL_ID)")
+    );
   } else {
     console.log("[status] STATUS_CHANNEL_ID not set — status board + checker disabled");
   }
@@ -477,12 +545,17 @@ client.on("interactionCreate", async (i) => {
     } else if (i.commandName === "status") {
       await i.deferReply({ flags: MessageFlags.Ephemeral });
       const mirrors = await fetchMirrors();
-      const rows = await Promise.all(
-        mirrors.map(async (m) => `${(await ping(m.url)) ? "🟢" : "🔴"} ${m.url}`)
-      );
+      const results = await Promise.all(mirrors.map((m) => probe(m.url)));
+      const rows = results.map((r) => {
+        const emoji = STATE_EMOJI[r.state] || "⚪";
+        const detail =
+          r.state === UP ? ` _(${r.ms}ms)_` : ` — ${r.reason}${r.status ? ` (HTTP ${r.status})` : ""}`;
+        return `${emoji} ${hostLabel(r.url)}${detail}`;
+      });
+      const up = results.filter((r) => r.state === UP).length;
       const embed = new EmbedBuilder()
         .setColor(BRAND)
-        .setTitle("Halcyon — link status")
+        .setTitle(`Halcyon — link status (${up}/${results.length} healthy)`)
         .setDescription(rows.join("\n") || "_No links configured._");
       await i.editReply({ embeds: [embed] });
     } else if (i.commandName === "byod") {
