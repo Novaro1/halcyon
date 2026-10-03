@@ -3,15 +3,18 @@
 //
 // The old check treated ANY HTTP response as "up", so a Caddy 502, a parked
 // domain, or a school-filter block page all showed green. A *healthy* Halcyon
-// mirror instead answers GET / with 200 and the passphrase login page — one
-// response that proves the whole chain (DNS → valid cert → Caddy → the Scramjet
-// app) is alive. We look for that page's signature and classify everything else
-// as "degraded" (server answered, but it isn't serving Halcyon) or "down"
+// mirror instead answers GET / with 200 and a Halcyon page — the PoW gate, the
+// legacy passphrase login, or the app shell all carry `<title>Halcyon</title>`.
+// That one response proves the whole chain (DNS → valid cert → Caddy → the
+// Scramjet app) is alive. We look for that marker and classify everything else as
+// "degraded" (server answered, but it isn't serving Halcyon) or "down"
 // (couldn't reach it at all).
 
-// The login page (server.js `loginPage`) always contains the passphrase form.
-// Both markers together are specific enough that a block/parked page won't match.
-const HALCYON_SIGNATURE = [/action=["']\/login["']/i, /name=["']password["']/i];
+// `<title>Halcyon</title>` is present on every real Halcyon response (gate page,
+// login, or app) and absent from 502s / parked / filter-block pages — specific
+// enough on its own. (Gate style has changed over time — passphrase → Turnstile →
+// PoW — so we match the stable title, not a form field that comes and goes.)
+const HALCYON_SIGNATURE = [/<title>\s*Halcyon\s*<\/title>/i];
 
 export const UP = "up";
 export const DEGRADED = "degraded";
