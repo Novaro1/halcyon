@@ -1,0 +1,16 @@
+[Unit]
+Description=Halcyon independent uptime monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/%i/halcyon/monitor
+ExecStart=/usr/bin/node /home/%i/halcyon/monitor/monitor.mjs
+Restart=always
+RestartSec=10
+# Secrets/config live here (chmod 600), not in the unit — see monitor/README.md:
+EnvironmentFile=/home/%i/halcyon/monitor/monitor.env
+
+[Install]
+WantedBy=multi-user.target
