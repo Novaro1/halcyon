@@ -3,7 +3,7 @@ import { createReadStream, existsSync, statSync, readFileSync } from "node:fs";
 import { extname, join, normalize, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { createHash, createHmac, timingSafeEqual, randomBytes } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual, randomBytes, randomInt } from "node:crypto";
 import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
 
 const require = createRequire(import.meta.url);
@@ -132,23 +132,26 @@ const wispLimiter = makeLimiter(num("HALCYON_RL_WISP", 300), 60_000); // upgrade
 const MAX_WISP_CONCURRENT = num("HALCYON_MAX_CONN", 128); // concurrent tunnels/IP
 const wispConns = new Map(); // ip -> live connection count
 
-// ---- CAPTCHA gate (Cloudflare Turnstile) ----------------------------------
-// When TURNSTILE_SECRET is set, visitors pass a Turnstile challenge instead of
-// typing a passphrase; on success they get a signed, time-limited SESSION TOKEN
-// that authorizes the wisp tunnel — delivered as a cookie (same-origin mirrors)
-// or a `?t=` query param (cross-origin front links). This is what lets the
-// frontend live on any static host while the tunnel still phones home to this one
-// origin. Keys: dash.cloudflare.com -> Turnstile (sitekey is public, secret isn't).
-// Leave TURNSTILE_SECRET unset to keep the legacy passphrase gate unchanged.
-const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET || "";
-const TURNSTILE_SITEKEY = process.env.TURNSTILE_SITEKEY || "";
-// Signs session tokens. Set HALCYON_SESSION_SECRET so sessions survive restarts;
-// otherwise a random per-boot key is used (every redeploy re-challenges users).
+// ---- Proof-of-work gate ---------------------------------------------------
+// Instead of a passphrase or a third-party CAPTCHA (whose hostname allowlists
+// can't cover unlimited rotating front links), the gate is a self-hosted proof-
+// of-work puzzle served from THIS origin: the browser fetches a signed challenge,
+// solves it, and POSTs the solution to /auth for a signed SESSION TOKEN that
+// authorizes the wisp tunnel — as a cookie (same-origin mirrors) or a `?t=` query
+// param (cross-origin front links). No external dependency and no per-domain
+// registration, so it works on any host a front link lives on. Enable with
+// HALCYON_POW=1. Difficulty is the search space the browser scans (higher = more
+// CPU); ~5e5 is roughly a second of browser work.
+const POW_ON = /^(1|true|on|yes)$/i.test(process.env.HALCYON_POW || "");
+const POW_DIFFICULTY = num("HALCYON_POW_DIFFICULTY", 500_000);
+const POW_TTL_MS = num("HALCYON_POW_TTL_S", 120) * 1000; // time allowed to solve
+// Signs session + challenge tokens. Set HALCYON_SESSION_SECRET so sessions survive
+// restarts; otherwise a random per-boot key is used (every redeploy re-challenges).
 const SESSION_SECRET =
   process.env.HALCYON_SESSION_SECRET || PASSWORD || randomBytes(32).toString("hex");
 const SESSION_TTL_MS = num("HALCYON_SESSION_TTL_H", 168) * 3_600_000; // default 7d
-// The gate is "on" if EITHER the legacy passphrase or Turnstile is configured.
-const GATE_ON = Boolean(AUTH_TOKEN) || Boolean(TURNSTILE_SECRET);
+// The gate is "on" if EITHER the legacy passphrase or the PoW gate is enabled.
+const GATE_ON = Boolean(AUTH_TOKEN) || POW_ON;
 
 // ---- Domain allowlist (for Caddy on-demand TLS) ---------------------------
 // The many mirror domains (FreeDNS etc.) all point at this one origin. Caddy's
@@ -544,25 +547,42 @@ function verifySession(token) {
   if (a.length !== b.length || !timingSafeEqual(a, b)) return false;
   return Number(exp) > Date.now();
 }
-// Verify a Cloudflare Turnstile response token against the siteverify API.
-async function verifyTurnstile(token, ip) {
-  if (!TURNSTILE_SECRET || !token) return false;
-  try {
-    const body = new URLSearchParams({ secret: TURNSTILE_SECRET, response: token });
-    if (ip && ip !== "?") body.set("remoteip", ip);
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8000);
-    const r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-      method: "POST",
-      body,
-      signal: ctrl.signal,
-    });
-    clearTimeout(timer);
-    const d = await r.json();
-    return !!(d && d.success);
-  } catch {
-    return false;
+// ---- Proof-of-work challenge ----------------------------------------------
+// Signed, stateless challenge: the client must find `number` in [0,POW_DIFFICULTY)
+// with sha256(salt + number) === challenge. We sign (salt.challenge.exp) so the
+// solution can be verified later without storing anything, and track spent tokens
+// briefly to stop replay. Verify is O(1) — one hash + one HMAC.
+const powSha = (s) => createHash("sha256").update(s).digest("hex");
+function makeChallenge() {
+  const salt = randomBytes(12).toString("hex");
+  const number = randomInt(0, POW_DIFFICULTY);
+  const challenge = powSha(salt + number);
+  const exp = Date.now() + POW_TTL_MS;
+  const payload = `${salt}.${challenge}.${exp}`;
+  const sig = createHmac("sha256", SESSION_SECRET).update(payload).digest("base64url");
+  return { salt, challenge, max: POW_DIFFICULTY, token: `${payload}.${sig}` };
+}
+const usedChallenges = new Map(); // token -> exp (one-time use; evicted on expiry)
+function verifyPow(token, number) {
+  if (!token || typeof token !== "string") return false;
+  const parts = token.split(".");
+  if (parts.length !== 4) return false;
+  const [salt, challenge, exp, sig] = parts;
+  const expect = createHmac("sha256", SESSION_SECRET)
+    .update(`${salt}.${challenge}.${exp}`)
+    .digest("base64url");
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expect);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return false; // not ours
+  if (!(Number(exp) > Date.now())) return false; //                    expired
+  if (usedChallenges.has(token)) return false; //                      replay
+  if (!Number.isInteger(number) || powSha(salt + String(number)) !== challenge) return false;
+  usedChallenges.set(token, Number(exp));
+  if (usedChallenges.size > 5000) {
+    const now = Date.now();
+    for (const [k, e] of usedChallenges) if (e <= now) usedChallenges.delete(k);
   }
+  return true;
 }
 
 function isAuthed(req) {
@@ -576,8 +596,8 @@ function isAuthed(req) {
       if (a.length === b.length && timingSafeEqual(a, b)) return true;
     }
   }
-  // Turnstile session — cookie (same-origin) or ?t= token (cross-origin front).
-  if (TURNSTILE_SECRET) {
+  // PoW session — cookie (same-origin) or ?t= token (cross-origin front).
+  if (POW_ON) {
     const c = (req.headers.cookie || "").match(/(?:^|;\s*)halcyon_sess=([^;]+)/);
     if (c && verifySession(decodeURIComponent(c[1]))) return true;
     try {
@@ -636,52 +656,75 @@ function loginPage(error = false) {
 </form></body></html>`;
 }
 
-// The CAPTCHA gate page (Turnstile). On a successful challenge it POSTs the token
-// to /auth, which mints the session cookie, then reloads into the app. Self-
-// contained (inline styles + the Turnstile script from Cloudflare) so it needs
-// none of the gated app assets.
+// The proof-of-work gate page. It fetches a signed challenge, solves it in the
+// browser (chunked so the tab stays responsive), POSTs the solution to /auth to
+// mint the session cookie, then reloads into the app. Fully self-contained — no
+// external scripts, no gated app assets — so it renders on any front host.
 function gatePage() {
   return `<!doctype html><html><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <meta name="robots" content="noindex"/><title>Halcyon</title>
-<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 <style>
-  :root{color-scheme:dark}
-  *{box-sizing:border-box}
+  :root{color-scheme:dark}*{box-sizing:border-box}
   body{margin:0;height:100vh;display:grid;place-items:center;
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-    color:#f4eee1;background:radial-gradient(1000px 600px at 20% 0%,rgba(31,209,163,.16),transparent 60%),
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#f4eee1;
+    background:radial-gradient(1000px 600px at 20% 0%,rgba(31,209,163,.16),transparent 60%),
     radial-gradient(900px 500px at 100% 20%,rgba(255,138,76,.12),transparent 55%),#040b09}
-  .card{width:340px;padding:34px 30px;border-radius:22px;text-align:center;
+  .card{width:320px;padding:34px 30px;border-radius:22px;text-align:center;
     background:rgba(255,250,240,.05);border:1px solid rgba(255,250,240,.12);
     backdrop-filter:blur(20px);box-shadow:0 24px 60px rgba(0,0,0,.5)}
   .orb{width:44px;height:44px;border-radius:50%;margin:0 auto 16px;
-    background:linear-gradient(118deg,#1fd1a3,#ffd27a,#ff8a4c);
-    box-shadow:0 0 18px rgba(31,209,163,.5)}
-  h1{font-size:22px;margin:0 0 4px;letter-spacing:-.5px}
-  p{color:#9ba79a;font-size:13px;margin:0 0 22px}
-  .cf-turnstile{display:flex;justify-content:center;min-height:65px}
-  .err{color:#ff8f8f;font-size:12.5px;margin-top:14px;min-height:1em}
+    background:linear-gradient(118deg,#1fd1a3,#ffd27a,#ff8a4c);box-shadow:0 0 18px rgba(31,209,163,.5);
+    animation:pulse 1.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.84);opacity:.65}}
+  h1{font-size:22px;margin:0 0 6px;letter-spacing:-.5px}
+  p{color:#9ba79a;font-size:13px;margin:0;min-height:1.2em}
 </style></head><body>
 <div class="card">
   <div class="orb"></div>
   <h1>Halcyon</h1>
-  <p>Quick check to keep bots out.</p>
-  <div class="cf-turnstile" data-sitekey="${TURNSTILE_SITEKEY}" data-callback="onToken"></div>
-  <div class="err" id="e"></div>
+  <p id="s">Checking your browser…</p>
 </div>
 <script>
-  function onToken(token){
-    fetch('/auth',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({token:token})})
-      .then(function(r){return r.json()})
-      .then(function(d){
-        if(d&&d.ok){location.reload()}
-        else{document.getElementById('e').textContent='Check failed — try again.';
-          if(window.turnstile)turnstile.reset();}
-      })
-      .catch(function(){document.getElementById('e').textContent='Network error — try again.';});
+(function(){
+  var s=document.getElementById('s');
+  function fail(m){s.textContent=m;}
+  function sha256hex(a){
+    function R(n,x){return (x>>>n)|(x<<(32-n));}
+    var K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+    var h0=0x6a09e667,h1=0xbb67ae85,h2=0x3c6ef372,h3=0xa54ff53a,h4=0x510e527f,h5=0x9b05688c,h6=0x1f83d9ab,h7=0x5be0cd19;
+    var by=[],i; for(i=0;i<a.length;i++)by.push(a.charCodeAt(i)&0xff);
+    var bl=by.length*8; by.push(0x80); while(by.length%64!==56)by.push(0);
+    by.push(0,0,0,0,(bl>>>24)&0xff,(bl>>>16)&0xff,(bl>>>8)&0xff,bl&0xff);
+    var w=new Array(64),j;
+    for(j=0;j<by.length;j+=64){
+      for(i=0;i<16;i++)w[i]=(by[j+i*4]<<24)|(by[j+i*4+1]<<16)|(by[j+i*4+2]<<8)|(by[j+i*4+3]);
+      for(i=16;i<64;i++){var x1=w[i-15],x2=w[i-2];var s0=R(7,x1)^R(18,x1)^(x1>>>3);var s1=R(17,x2)^R(19,x2)^(x2>>>10);w[i]=(w[i-16]+s0+w[i-7]+s1)|0;}
+      var A=h0,B=h1,C=h2,D=h3,E=h4,F=h5,G=h6,H=h7;
+      for(i=0;i<64;i++){var S1=R(6,E)^R(11,E)^R(25,E);var ch=(E&F)^(~E&G);var t1=(H+S1+ch+K[i]+w[i])|0;var S0=R(2,A)^R(13,A)^R(22,A);var mj=(A&B)^(A&C)^(B&C);var t2=(S0+mj)|0;H=G;G=F;F=E;E=(D+t1)|0;D=C;C=B;B=A;A=(t1+t2)|0;}
+      h0=(h0+A)|0;h1=(h1+B)|0;h2=(h2+C)|0;h3=(h3+D)|0;h4=(h4+E)|0;h5=(h5+F)|0;h6=(h6+G)|0;h7=(h7+H)|0;
+    }
+    function hx(x){return ((x>>>0).toString(16)).padStart(8,'0');}
+    return hx(h0)+hx(h1)+hx(h2)+hx(h3)+hx(h4)+hx(h5)+hx(h6)+hx(h7);
   }
+  fetch('/challenge',{cache:'no-store'}).then(function(r){return r.json()}).then(function(c){
+    var n=0,CHUNK=25000;
+    function submit(num){
+      s.textContent='Almost there…';
+      fetch('/auth',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({token:c.token,number:num})})
+        .then(function(r){return r.json()}).then(function(d){
+          if(d&&d.ok){location.reload()} else {fail('Could not verify — reload to retry.');}
+        }).catch(function(){fail('Network error — reload to retry.');});
+    }
+    function step(){
+      var end=Math.min(n+CHUNK,c.max);
+      for(;n<end;n++){ if(sha256hex(c.salt+n)===c.challenge){return submit(n);} }
+      if(n<c.max){ setTimeout(step,0); } else { fail('Could not verify — reload to retry.'); }
+    }
+    step();
+  }).catch(function(){fail('Network error — reload to retry.');});
+})();
 </script>
 </body></html>`;
 }
@@ -708,22 +751,31 @@ const server = http.createServer(async (req, res) => {
       return res.end("Too many requests — slow down.");
     }
 
-    // ---- CAPTCHA session mint: Turnstile token -> signed session. Public and
-    // CORS-open (OPTIONS preflight handled) so cross-origin front links can
-    // authorize the tunnel too; same-origin also gets the session as a cookie. ----
-    if (path === "/auth") {
+    // ---- PoW gate endpoints (public + CORS so cross-origin front links can use
+    // them). GET /challenge hands out a signed puzzle; POST /auth takes the
+    // solution and mints the session — a cookie (same-origin) + a token in the
+    // JSON body (for the ?t= cross-origin tunnel). ----
+    if (path === "/challenge" || path === "/auth") {
       res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
       res.setHeader("Vary", "Origin");
-      res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
       res.setHeader("Access-Control-Allow-Headers", "Content-Type");
       if (req.method === "OPTIONS") {
         res.writeHead(204);
         return res.end();
       }
-      if (!TURNSTILE_SECRET) {
+      if (!POW_ON) {
         res.writeHead(404, { "Content-Type": "text/plain" });
         return res.end("Not found");
       }
+      if (path === "/challenge") {
+        res.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store",
+        });
+        return res.end(JSON.stringify(makeChallenge()));
+      }
+      // path === "/auth"
       if (req.method !== "POST") {
         res.writeHead(405, { "Content-Type": "text/plain" });
         return res.end("POST only");
@@ -734,13 +786,17 @@ const server = http.createServer(async (req, res) => {
       }
       const raw = await readBody(req);
       let token = "";
+      let number = NaN;
       try {
-        token = JSON.parse(raw).token || "";
+        const j = JSON.parse(raw);
+        token = j.token || "";
+        number = Number(j.number);
       } catch {
         const p = new URLSearchParams(raw);
-        token = p.get("token") || p.get("cf-turnstile-response") || "";
+        token = p.get("token") || "";
+        number = Number(p.get("number"));
       }
-      if (!(await verifyTurnstile(token, ip))) {
+      if (!verifyPow(token, number)) {
         res.writeHead(403, { "Content-Type": "application/json" });
         return res.end('{"ok":false}');
       }
@@ -798,8 +854,8 @@ const server = http.createServer(async (req, res) => {
       if (!PUBLIC_ASSET && !isAuthed(req)) {
         const wantsHtml = (req.headers.accept || "").includes("text/html");
         if (wantsHtml) {
-          // Turnstile mode shows the CAPTCHA page; passphrase mode redirects to /login.
-          if (TURNSTILE_SECRET) {
+          // PoW mode shows the challenge page; passphrase mode redirects to /login.
+          if (POW_ON) {
             res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
             return res.end(gatePage());
           }
@@ -932,7 +988,9 @@ server.listen(PORT, HOST, () => {
     `  Guardrails: ports ${ALLOWED_PORTS.join("/")}, UDP off, ` +
       `${DENY_HOSTS.length} host denies; ≤${MAX_WISP_CONCURRENT} tunnels/IP + rate limits.`
   );
-  if (AUTH_TOKEN) {
+  if (POW_ON) {
+    console.log(`  Access gate: ON (proof-of-work, difficulty ${POW_DIFFICULTY}).`);
+  } else if (AUTH_TOKEN) {
     console.log(`  Access gate: ON (passphrase required).`);
   } else if (HOST !== "127.0.0.1" && HOST !== "localhost") {
     console.log(
