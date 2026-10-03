@@ -17,6 +17,15 @@ services:
       # Required — the shared passphrase (set it in your shell / an .env file,
       # never commit it). Everything past the gate rides the abuse guardrails.
       HALCYON_PASSWORD: ${HALCYON_PASSWORD:?set HALCYON_PASSWORD}
+      # CAPTCHA gate (Cloudflare Turnstile). Set TURNSTILE_SECRET + TURNSTILE_SITEKEY
+      # in deploy/.env to swap the passphrase prompt for a Turnstile challenge that
+      # mints a session token (cookie same-origin, ?t= token cross-origin). Leaving
+      # them blank keeps the passphrase gate. Keys: dash.cloudflare.com -> Turnstile.
+      TURNSTILE_SECRET: ${TURNSTILE_SECRET:-}
+      TURNSTILE_SITEKEY: ${TURNSTILE_SITEKEY:-}
+      # Signs session tokens. Optional — falls back to HALCYON_PASSWORD (so sessions
+      # survive restarts). Set a long random string here if you ever drop the passphrase.
+      HALCYON_SESSION_SECRET: ${HALCYON_SESSION_SECRET:-}
       # Optional filtering resolver, etc. — see the main README.
       # HALCYON_DNS: 94.140.14.14,94.140.15.15
     volumes:

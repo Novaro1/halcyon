@@ -3,7 +3,7 @@ import { createReadStream, existsSync, statSync, readFileSync } from "node:fs";
 import { extname, join, normalize, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual, randomBytes } from "node:crypto";
 import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
 
 const require = createRequire(import.meta.url);
@@ -131,6 +131,24 @@ const loginLimiter = makeLimiter(num("HALCYON_RL_LOGIN", 20), 60_000); // strict
 const wispLimiter = makeLimiter(num("HALCYON_RL_WISP", 300), 60_000); // upgrades/min/IP
 const MAX_WISP_CONCURRENT = num("HALCYON_MAX_CONN", 128); // concurrent tunnels/IP
 const wispConns = new Map(); // ip -> live connection count
+
+// ---- CAPTCHA gate (Cloudflare Turnstile) ----------------------------------
+// When TURNSTILE_SECRET is set, visitors pass a Turnstile challenge instead of
+// typing a passphrase; on success they get a signed, time-limited SESSION TOKEN
+// that authorizes the wisp tunnel — delivered as a cookie (same-origin mirrors)
+// or a `?t=` query param (cross-origin front links). This is what lets the
+// frontend live on any static host while the tunnel still phones home to this one
+// origin. Keys: dash.cloudflare.com -> Turnstile (sitekey is public, secret isn't).
+// Leave TURNSTILE_SECRET unset to keep the legacy passphrase gate unchanged.
+const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET || "";
+const TURNSTILE_SITEKEY = process.env.TURNSTILE_SITEKEY || "";
+// Signs session tokens. Set HALCYON_SESSION_SECRET so sessions survive restarts;
+// otherwise a random per-boot key is used (every redeploy re-challenges users).
+const SESSION_SECRET =
+  process.env.HALCYON_SESSION_SECRET || PASSWORD || randomBytes(32).toString("hex");
+const SESSION_TTL_MS = num("HALCYON_SESSION_TTL_H", 168) * 3_600_000; // default 7d
+// The gate is "on" if EITHER the legacy passphrase or Turnstile is configured.
+const GATE_ON = Boolean(AUTH_TOKEN) || Boolean(TURNSTILE_SECRET);
 
 // ---- Domain allowlist (for Caddy on-demand TLS) ---------------------------
 // The many mirror domains (FreeDNS etc.) all point at this one origin. Caddy's
@@ -492,6 +510,10 @@ function baseHeaders(res) {
   res.setHeader("Referrer-Policy", "no-referrer");
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  // Everything we serve here is public, non-credentialed static content (shell,
+  // runtime, live lists). Allow cross-origin reads so front links on other hosts
+  // can pull the runtime + lists from this origin. The tunnel stays gated.
+  res.setHeader("Access-Control-Allow-Origin", "*");
 }
 
 function sendFile(res, filePath, { immutable = false } = {}) {
@@ -503,14 +525,67 @@ function sendFile(res, filePath, { immutable = false } = {}) {
 }
 
 // ---- Auth helpers ---------------------------------------------------------
+// A signed, stateless session token: "<expMs>.<hmac>". No server storage — the
+// HMAC proves we issued it and the expiry bounds it. Used as a cookie (same-origin)
+// or a ?t= query param (cross-origin fronts) to authorize the wisp tunnel.
+function signSession(ttlMs = SESSION_TTL_MS) {
+  const exp = String(Date.now() + ttlMs);
+  const sig = createHmac("sha256", SESSION_SECRET).update(exp).digest("base64url");
+  return `${exp}.${sig}`;
+}
+function verifySession(token) {
+  if (!token || typeof token !== "string") return false;
+  const dot = token.indexOf(".");
+  if (dot < 1) return false;
+  const exp = token.slice(0, dot);
+  const expect = createHmac("sha256", SESSION_SECRET).update(exp).digest("base64url");
+  const a = Buffer.from(token.slice(dot + 1));
+  const b = Buffer.from(expect);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return false;
+  return Number(exp) > Date.now();
+}
+// Verify a Cloudflare Turnstile response token against the siteverify API.
+async function verifyTurnstile(token, ip) {
+  if (!TURNSTILE_SECRET || !token) return false;
+  try {
+    const body = new URLSearchParams({ secret: TURNSTILE_SECRET, response: token });
+    if (ip && ip !== "?") body.set("remoteip", ip);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      body,
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    const d = await r.json();
+    return !!(d && d.success);
+  } catch {
+    return false;
+  }
+}
+
 function isAuthed(req) {
-  if (!AUTH_TOKEN) return true;
-  const cookie = req.headers.cookie || "";
-  const match = cookie.match(/(?:^|;\s*)halcyon_auth=([a-f0-9]{64})/);
-  if (!match) return false;
-  const a = Buffer.from(match[1]);
-  const b = Buffer.from(AUTH_TOKEN);
-  return a.length === b.length && timingSafeEqual(a, b);
+  if (!GATE_ON) return true;
+  // Legacy passphrase cookie.
+  if (AUTH_TOKEN) {
+    const m = (req.headers.cookie || "").match(/(?:^|;\s*)halcyon_auth=([a-f0-9]{64})/);
+    if (m) {
+      const a = Buffer.from(m[1]);
+      const b = Buffer.from(AUTH_TOKEN);
+      if (a.length === b.length && timingSafeEqual(a, b)) return true;
+    }
+  }
+  // Turnstile session — cookie (same-origin) or ?t= token (cross-origin front).
+  if (TURNSTILE_SECRET) {
+    const c = (req.headers.cookie || "").match(/(?:^|;\s*)halcyon_sess=([^;]+)/);
+    if (c && verifySession(decodeURIComponent(c[1]))) return true;
+    try {
+      const t = new URL(req.url, "http://x").searchParams.get("t");
+      if (t && verifySession(t)) return true;
+    } catch {}
+  }
+  return false;
 }
 
 function readBody(req) {
@@ -561,6 +636,56 @@ function loginPage(error = false) {
 </form></body></html>`;
 }
 
+// The CAPTCHA gate page (Turnstile). On a successful challenge it POSTs the token
+// to /auth, which mints the session cookie, then reloads into the app. Self-
+// contained (inline styles + the Turnstile script from Cloudflare) so it needs
+// none of the gated app assets.
+function gatePage() {
+  return `<!doctype html><html><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="robots" content="noindex"/><title>Halcyon</title>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<style>
+  :root{color-scheme:dark}
+  *{box-sizing:border-box}
+  body{margin:0;height:100vh;display:grid;place-items:center;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    color:#f4eee1;background:radial-gradient(1000px 600px at 20% 0%,rgba(31,209,163,.16),transparent 60%),
+    radial-gradient(900px 500px at 100% 20%,rgba(255,138,76,.12),transparent 55%),#040b09}
+  .card{width:340px;padding:34px 30px;border-radius:22px;text-align:center;
+    background:rgba(255,250,240,.05);border:1px solid rgba(255,250,240,.12);
+    backdrop-filter:blur(20px);box-shadow:0 24px 60px rgba(0,0,0,.5)}
+  .orb{width:44px;height:44px;border-radius:50%;margin:0 auto 16px;
+    background:linear-gradient(118deg,#1fd1a3,#ffd27a,#ff8a4c);
+    box-shadow:0 0 18px rgba(31,209,163,.5)}
+  h1{font-size:22px;margin:0 0 4px;letter-spacing:-.5px}
+  p{color:#9ba79a;font-size:13px;margin:0 0 22px}
+  .cf-turnstile{display:flex;justify-content:center;min-height:65px}
+  .err{color:#ff8f8f;font-size:12.5px;margin-top:14px;min-height:1em}
+</style></head><body>
+<div class="card">
+  <div class="orb"></div>
+  <h1>Halcyon</h1>
+  <p>Quick check to keep bots out.</p>
+  <div class="cf-turnstile" data-sitekey="${TURNSTILE_SITEKEY}" data-callback="onToken"></div>
+  <div class="err" id="e"></div>
+</div>
+<script>
+  function onToken(token){
+    fetch('/auth',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({token:token})})
+      .then(function(r){return r.json()})
+      .then(function(d){
+        if(d&&d.ok){location.reload()}
+        else{document.getElementById('e').textContent='Check failed — try again.';
+          if(window.turnstile)turnstile.reset();}
+      })
+      .catch(function(){document.getElementById('e').textContent='Network error — try again.';});
+  }
+</script>
+</body></html>`;
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host}`);
@@ -583,9 +708,68 @@ const server = http.createServer(async (req, res) => {
       return res.end("Too many requests — slow down.");
     }
 
+    // ---- CAPTCHA session mint: Turnstile token -> signed session. Public and
+    // CORS-open (OPTIONS preflight handled) so cross-origin front links can
+    // authorize the tunnel too; same-origin also gets the session as a cookie. ----
+    if (path === "/auth") {
+      res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
+      res.setHeader("Vary", "Origin");
+      res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+      if (req.method === "OPTIONS") {
+        res.writeHead(204);
+        return res.end();
+      }
+      if (!TURNSTILE_SECRET) {
+        res.writeHead(404, { "Content-Type": "text/plain" });
+        return res.end("Not found");
+      }
+      if (req.method !== "POST") {
+        res.writeHead(405, { "Content-Type": "text/plain" });
+        return res.end("POST only");
+      }
+      if (!loginLimiter(ip)) {
+        res.writeHead(429, { "Content-Type": "text/plain", "Retry-After": "60" });
+        return res.end("Too many attempts — wait a minute.");
+      }
+      const raw = await readBody(req);
+      let token = "";
+      try {
+        token = JSON.parse(raw).token || "";
+      } catch {
+        const p = new URLSearchParams(raw);
+        token = p.get("token") || p.get("cf-turnstile-response") || "";
+      }
+      if (!(await verifyTurnstile(token, ip))) {
+        res.writeHead(403, { "Content-Type": "application/json" });
+        return res.end('{"ok":false}');
+      }
+      const session = signSession();
+      const secure = req.headers["x-forwarded-proto"] === "https" ? "; Secure" : "";
+      res.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Set-Cookie": `halcyon_sess=${session}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.floor(
+          SESSION_TTL_MS / 1000
+        )}${secure}`,
+      });
+      return res.end(JSON.stringify({ ok: true, token: session }));
+    }
+
+    // Public assets — served even when not authed (with the permissive CORS from
+    // baseHeaders) so a cross-origin front link can pull the runtime + live lists
+    // from this origin. The app shell (index.html etc.) stays gated below.
+    const PUBLIC_ASSET =
+      Object.prototype.hasOwnProperty.call(runtimeFiles, path) ||
+      path === "/blocklist.txt" ||
+      path === "/allowlist.txt" ||
+      path === "/ai-blocklist.txt" ||
+      path === "/removeparams.json" ||
+      path === "/discord-adblock.css";
+
     // ---- Access gate ----
-    if (AUTH_TOKEN) {
-      if (path === "/login") {
+    if (GATE_ON) {
+      // Legacy passphrase login (only when a passphrase is configured).
+      if (AUTH_TOKEN && path === "/login") {
         if (req.method === "POST") {
           // Strict limit on login attempts — brute-force defense.
           if (!loginLimiter(ip)) {
@@ -610,9 +794,15 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
         return res.end(loginPage(false));
       }
-      if (!isAuthed(req)) {
+
+      if (!PUBLIC_ASSET && !isAuthed(req)) {
         const wantsHtml = (req.headers.accept || "").includes("text/html");
         if (wantsHtml) {
+          // Turnstile mode shows the CAPTCHA page; passphrase mode redirects to /login.
+          if (TURNSTILE_SECRET) {
+            res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+            return res.end(gatePage());
+          }
           res.writeHead(303, { Location: "/login" });
           return res.end();
         }
@@ -703,15 +893,17 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-// Wisp websocket upgrade — the tunnel the proxy rides on. Gated by the same
-// cookie so an exposed instance can't be used as an anonymous relay.
+// Wisp websocket upgrade — the tunnel the proxy rides on. Gated by the session
+// (passphrase cookie, Turnstile cookie, or ?t= token) so an exposed instance
+// can't be used as an anonymous relay.
 server.on("upgrade", (req, socket, head) => {
-  if (AUTH_TOKEN && !isAuthed(req)) {
+  if (GATE_ON && !isAuthed(req)) {
     socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
     socket.destroy();
     return;
   }
-  if (!req.url.endsWith("/wisp/")) {
+  // Match the path ignoring the query so a cross-origin ?t= token is allowed.
+  if (!req.url.split("?")[0].endsWith("/wisp/")) {
     socket.end();
     return;
   }
