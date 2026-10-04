@@ -11,9 +11,12 @@
 # Deploy the out-dir, e.g.:  npx wrangler pages deploy dist/front
 set -euo pipefail
 
-BACKEND="${1:?usage: build-front.sh <backend-origin> [out-dir]   e.g. https://api.studybuddy.website}"
+BACKEND="${1:?usage: build-front.sh <backend-origin> [out-dir] [base-path]   e.g. https://api.studybuddy.website dist/front /mybucket}"
 OUT="${2:-dist/front}"
+BASE="${3:-}"          # "" for an origin root (appspot/Pages); "/<bucket>" for a sub-path host (GCS)
 BACKEND="${BACKEND%/}" # strip trailing slash
+BASE="${BASE%/}"       # strip trailing slash
+[ -n "$BASE" ] && case "$BASE" in /*) ;; *) BASE="/$BASE" ;; esac # ensure a leading slash
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 rm -rf "$OUT"
@@ -26,7 +29,7 @@ cp -r "$ROOT"/public/assets "$OUT/assets"
 
 # Front gate + shell (shell gets the backend origin substituted in).
 cp "$ROOT"/front/gate.js "$OUT/gate.js"
-sed "s|__HALCYON_BACKEND__|$BACKEND|g" "$ROOT"/front/index.html > "$OUT/index.html"
+sed -e "s|__HALCYON_BACKEND__|$BACKEND|g" -e "s|__HALCYON_BASE__|$BASE|g" "$ROOT"/front/index.html > "$OUT/index.html"
 
 # Scramjet runtime, bundled same-origin on the front (resolved from node_modules).
 ROOT="$ROOT" OUT="$OUT" node -e '

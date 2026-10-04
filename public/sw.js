@@ -3,7 +3,12 @@
 // handing anything else to the Scramjet controller — a faked HTTP response
 // still "succeeds" as far as a proxied page's fetch is concerned, so only a
 // genuine failure actually blocks.
-importScripts("/scram/controller.sw.js");
+// Base path the app is served under, derived from where THIS worker is served:
+// "/sw.js" -> "" (origin root), "/<bucket>/sw.js" -> "/<bucket>" (sub-path host).
+// The client sends the matching proxy prefix at init, so routing just works; we
+// only need the base here to load the controller + decode proxied URLs correctly.
+const BASE = self.location.pathname.replace(/\/sw\.js$/, "");
+importScripts(BASE + "/scram/controller.sw.js");
 
 let ADBLOCK = true;
 let blockedCount = 0;
@@ -113,7 +118,9 @@ const aiBlockedHost = (h) => hostInSet(h, AI_BLOCK);
 function realUrlOf(reqUrl) {
   try {
     const p = new URL(reqUrl).pathname;
-    const m = p.match(/^\/~\/sj\/[^/]+\/[^/]+\/(.+)$/);
+    const m = p.match(
+      new RegExp("^" + BASE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "/~/sj/[^/]+/[^/]+/(.+)$")
+    );
     if (!m) return null;
     return new URL(decodeURIComponent(m[1]));
   } catch {

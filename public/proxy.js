@@ -1,13 +1,21 @@
 // Halcyon proxy runtime — wires up Scramjet + the controller + a Wisp transport
 // and exposes a tiny `window.Halcyon` API the UI drives.
 (() => {
+  // Base path the app is served under: "" at an origin root (the mirrors, appspot,
+  // Pages), or "/<bucket>" when hosted on a sub-path (e.g. a GCS bucket object URL
+  // like storage.googleapis.com/<bucket>/). Set via window.HALCYON_BASE in
+  // index.html. Everything below — runtime paths, the service-worker scope, and the
+  // Scramjet proxy prefix — derives from it, so the SAME build runs at root or on a
+  // sub-path. (The SW learns the prefix from the client at init, so setting
+  // config.prefix here is enough; see sw.js for the matching importScripts path.)
+  const BASE = (self.HALCYON_BASE || "").replace(/\/+$/, "");
   const RUNTIME = {
-    sw: "/sw.js",
-    scramjet: "/scram/scramjet.js",
-    controllerApi: "/scram/controller.api.js",
-    controllerInject: "/scram/controller.inject.js",
-    wasm: "/scram/scramjet.wasm",
-    libcurl: "/scram/libcurl.js",
+    sw: BASE + "/sw.js",
+    scramjet: BASE + "/scram/scramjet.js",
+    controllerApi: BASE + "/scram/controller.api.js",
+    controllerInject: BASE + "/scram/controller.inject.js",
+    wasm: BASE + "/scram/scramjet.wasm",
+    libcurl: BASE + "/scram/libcurl.js",
   };
 
   // Ad/tracker blocking happens in the service worker (see sw.js) — the only
@@ -202,6 +210,7 @@
     const reg = await navigator.serviceWorker.register(RUNTIME.sw, {
       type: "classic",
       updateViaCache: "none",
+      scope: BASE + "/",
     });
     await navigator.serviceWorker.ready;
     // Wait until the worker is actually *activated*…
@@ -317,6 +326,9 @@
       config.scramjetPath = RUNTIME.scramjet;
       config.injectPath = RUNTIME.controllerInject;
       config.wasmPath = RUNTIME.wasm;
+      // Proxy path prefix, under BASE so the SW (scoped to BASE + "/") routes it.
+      // At root this is "/~/sj/" — Scramjet's default — so behaviour is unchanged.
+      config.prefix = BASE + "/~/sj/";
 
       const transport = new window.LibcurlTransport.LibcurlClient({
         wisp: wispUrl(),

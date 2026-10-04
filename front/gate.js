@@ -24,11 +24,13 @@
     return null;
   }
   function loadApp() {
+    // Relative so they resolve under the origin root OR a sub-path (e.g. a GCS
+    // bucket). proxy.js reads window.HALCYON_BASE for its absolute runtime/SW paths.
     var p = document.createElement("script");
-    p.src = "/proxy.js";
+    p.src = "./proxy.js";
     p.onload = function () {
       var a = document.createElement("script");
-      a.src = "/app.js";
+      a.src = "./app.js";
       a.onload = hideGate;
       document.body.appendChild(a);
     };
