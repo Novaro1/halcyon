@@ -676,14 +676,22 @@ client.on("interactionCreate", async (i) => {
     if (i.commandName === "links") {
       const mirrors = await fetchMirrors();
       const list = mirrors.length
-        ? mirrors.map((m) => `• ${m.url}`).join("\n")
+        ? mirrors
+            .map((m) => {
+              const beats =
+                Array.isArray(m.filters) && m.filters.length
+                  ? `\n   ↳ beats: **${m.filters.join(", ")}**`
+                  : "";
+              return `• ${m.url}${beats}`;
+            })
+            .join("\n")
         : "_No links available right now — check back soon._";
       const embed = new EmbedBuilder()
         .setColor(BRAND)
         .setTitle("🌿 Halcyon — working links")
         .setDescription(list)
         .setFooter({
-          text: "Blocked at school? Try another — this list is always current.",
+          text: "Pick the one that beats your school's filter — this list is always current.",
         });
       await i.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     } else if (i.commandName === "status") {
@@ -720,9 +728,11 @@ client.on("interactionCreate", async (i) => {
       const res = await writeLink("add", { link });
       if (!res.ok) return i.editReply(`❌ Couldn't add it: ${res.error}`);
       await i.editReply(
-        `✅ Added **${res.link.url}**` +
-          (res.link.filters?.length ? `\nBeats: **${res.link.filters.join(", ")}**` : "") +
-          `\n_${res.count} link(s) total. It's live now; auto-announce will post it to <#${LINKS_CHANNEL_ID || "the links channel"}> shortly._`
+        `${res.updated ? "✏️ Updated" : "✅ Added"} **${res.link.url}**` +
+          (res.link.filters?.length
+            ? `\nBeats: **${res.link.filters.join(", ")}**`
+            : "\n_No filters set — run /check all in filter-check, then re-run /addlink with the filters it beats._") +
+          `\n_${res.count} link(s) total, live now._`
       );
       // post it to #which-link right away instead of waiting for the next sweep
       if (LINKS_CHANNEL_ID) announceNewLinks().catch(() => {});

@@ -144,22 +144,26 @@ async function botLinks(request, url, env) {
     let links = await getLinks(env); // seeds from LINKS_JSON on the first write
 
     if (body.op === "add") {
-      const link = body.link || {};
-      if (!link.url || !/^https?:\/\//i.test(link.url))
+      const incoming = body.link || {};
+      if (!incoming.url || !/^https?:\/\//i.test(incoming.url))
         return jres({ error: "link.url must be an http(s) URL" }, 400);
+      if (incoming.filters != null && !Array.isArray(incoming.filters))
+        return jres({ error: "link.filters must be an array" }, 400);
+      if (Array.isArray(incoming.filters))
+        incoming.filters = incoming.filters.map((f) => String(f).trim()).filter(Boolean);
+      // upsert: if the URL already exists, update it in place (keep fields the
+      // caller didn't send — e.g. host — and override the ones it did, like filters)
+      const existing = links.find((m) => norm(m.url) === norm(incoming.url));
+      const link = { ...existing, ...incoming };
       if (!link.host) {
         try {
           link.host = new URL(link.url).hostname;
         } catch {}
       }
-      if (link.filters != null && !Array.isArray(link.filters))
-        return jres({ error: "link.filters must be an array" }, 400);
-      if (Array.isArray(link.filters))
-        link.filters = link.filters.map((f) => String(f).trim()).filter(Boolean);
-      links = links.filter((m) => norm(m.url) !== norm(link.url)); // de-dupe by url
+      links = links.filter((m) => norm(m.url) !== norm(incoming.url));
       links.push(link);
       await env.LINKS.put("mirrors", JSON.stringify(links));
-      return jres({ ok: true, link, count: links.length });
+      return jres({ ok: true, link, updated: !!existing, count: links.length });
     }
 
     if (body.op === "remove") {
