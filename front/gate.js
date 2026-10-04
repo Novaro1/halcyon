@@ -11,7 +11,9 @@
   function hideGate() { if (gateEl) gateEl.style.display = "none"; }
   function wsBase() { return B.replace(/^http/, "ws"); }
   function setWisp(token) {
-    try { localStorage.setItem("halcyon:wisp", wsBase() + "/wisp/?t=" + encodeURIComponent(token)); } catch (e) {}
+    // Token as a path segment (not ?t=) so the wisp URL ends with "/", which the
+    // libcurl transport requires; the backend reads it from /wisp/<token>/.
+    try { localStorage.setItem("halcyon:wisp", wsBase() + "/wisp/" + token + "/"); } catch (e) {}
   }
   function storeSession(token) {
     try { localStorage.setItem("halcyon:session", JSON.stringify({ t: token, exp: Number(token.split(".")[0]) || 0 })); } catch (e) {}

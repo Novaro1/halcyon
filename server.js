@@ -953,16 +953,23 @@ const server = http.createServer(async (req, res) => {
 // (passphrase cookie, Turnstile cookie, or ?t= token) so an exposed instance
 // can't be used as an anonymous relay.
 server.on("upgrade", (req, socket, head) => {
-  if (GATE_ON && !isAuthed(req)) {
+  const pathOnly = req.url.split("?")[0];
+  // Same-origin uses the cookie at /wisp/. Cross-origin FRONT links can't use a
+  // ?t= query (the wisp transport requires the WS URL to end with "/"), so they
+  // pass the session token as a path segment: /wisp/<token>/.
+  const tok = pathOnly.match(/^\/wisp\/([^/]+)\/?$/);
+  const pathToken = tok ? tok[1] : null;
+  const authed = isAuthed(req) || (pathToken ? verifySession(pathToken) : false);
+  if (GATE_ON && !authed) {
     socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
     socket.destroy();
     return;
   }
-  // Match the path ignoring the query so a cross-origin ?t= token is allowed.
-  if (!req.url.split("?")[0].endsWith("/wisp/")) {
+  if (!(pathOnly.endsWith("/wisp/") || pathToken)) {
     socket.end();
     return;
   }
+  if (pathToken) req.url = "/wisp/"; // normalize the path for the wisp server
   // Per-IP tunnel guardrails: new-connection rate + concurrent-connection cap,
   // so one client can't open unbounded tunnels (egress blow-up / DoS).
   const ip = clientIp(req);
