@@ -38,6 +38,18 @@ functions.http("front", (req, res) => {
     res.set("Content-Type", TYPES[ext] || "application/octet-stream");
     if (p === "/sw.js") res.set("Service-Worker-Allowed", "/");
     res.set("Cache-Control", ext === ".html" || p === "/sw.js" ? "no-cache" : "public, max-age=3600");
+    // The bundle is built base="" (correct for the run.app root). When reached via
+    // cloudfunctions.net the app lives under /<function-name> (that prefix is
+    // stripped before we see it), so rewrite index.html's base for that host.
+    // Everything else (proxy.js, sw.js) reads the base at runtime, so only
+    // index.html needs patching.
+    if (p === "/index.html" && String(req.headers.host || "").endsWith("cloudfunctions.net")) {
+      data = Buffer.from(
+        data
+          .toString("utf8")
+          .replace(/window\.HALCYON_BASE\s*=\s*""/, 'window.HALCYON_BASE = "/halcyon-front"')
+      );
+    }
     res.status(200).send(data);
   });
 });

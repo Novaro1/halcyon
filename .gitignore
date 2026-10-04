@@ -45,3 +45,4 @@ Thumbs.db
 *.swp
 *~
 bot/state/
+firebase/public/   # built front bundle (backend baked in — never commit)
