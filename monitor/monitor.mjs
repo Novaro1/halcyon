@@ -75,7 +75,9 @@ async function cycle() {
   const results = await Promise.all(targets.map((u) => probe(u)));
   const transitions = monitor.update(results);
   for (const t of transitions) {
-    const label = t.key === BACKEND_URL ? `backend (${hostLabel(BACKEND)})` : hostLabel(t.key);
+    // NB: never put the backend's hostname in the alert — #status-alerts is member-
+    // visible and api.studybuddy.website is the unadvertised tunnel chokepoint.
+    const label = t.key === BACKEND_URL ? "backend" : hostLabel(t.key);
     const line = formatAlert(t, { label, roleId: ROLE_ID });
     console.log("[monitor] ALERT:", line);
     await postAlert(line);
