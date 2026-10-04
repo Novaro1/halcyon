@@ -32,7 +32,7 @@ import {
   TextInputStyle,
 } from "discord.js";
 import { resolve4 } from "node:dns/promises";
-import { readFile, appendFile } from "node:fs/promises";
+import { readFile, appendFile, writeFile } from "node:fs/promises";
 import { probe, StatusMonitor, formatAlert, STATE_EMOJI, UP, DEGRADED, DOWN } from "./health.js";
 
 const TOKEN = process.env.DISCORD_TOKEN;
@@ -61,6 +61,14 @@ const STATUS_ALERT_CHANNEL_ID = process.env.STATUS_ALERT_CHANNEL_ID || "";
 const STATUS_ALERT_ROLE_ID = process.env.STATUS_ALERT_ROLE_ID || "";
 // How many polls in a row a new state must hold before it's alerted (anti-flap).
 const STATUS_CONFIRM = Number(process.env.STATUS_CONFIRM_THRESHOLD || 2);
+
+// --- Auto-announce new links ---
+// When a new link appears in the list, post it to this channel with the filters
+// it's unblocked on and @mention the matching "Filter: <name>" roles. Blank = off.
+const LINKS_CHANNEL_ID = process.env.LINKS_CHANNEL_ID || "";
+// Remembers which link URLs have been announced (persist via a mounted volume; if
+// the file is lost, the current list is re-seeded silently — no re-spam).
+const ANNOUNCED_FILE = process.env.HALCYON_ANNOUNCED_FILE || "/data/state/announced-links.json";
 const GATE_URL =
   process.env.HALCYON_GATE_URL ||
   (() => { try { return new URL(LINKS_URL).origin; } catch { return ""; } })();
@@ -95,6 +103,92 @@ async function fetchMirrors() {
   } catch {
     return [];
   }
+}
+
+// ---- Auto-announce new links ----------------------------------------------
+// New links in the list get posted to LINKS_CHANNEL_ID with their filter coverage
+// (stored per-link as `filters` in LINKS_JSON) and an @mention of each matching
+// "Filter: <name>" role, so members only get pinged for links that work on their
+// school's filter.
+let filterRoleMap = new Map(); // lowercased filter name -> role id
+let announced = null; // Set of already-announced link URLs (null until loaded)
+
+async function buildFilterRoleMap() {
+  filterRoleMap = new Map();
+  if (!GUILD_ID) return;
+  try {
+    const guild = await client.guilds.fetch(GUILD_ID);
+    const roles = await guild.roles.fetch();
+    for (const role of roles.values()) {
+      const m = role.name.match(/^Filter:\s*(.+)$/i);
+      if (m) filterRoleMap.set(m[1].trim().toLowerCase(), role.id);
+    }
+    console.log(`[announce] ${filterRoleMap.size} "Filter:" role(s) found`);
+  } catch (e) {
+    console.error("[announce] couldn't fetch roles:", e.message);
+  }
+}
+
+async function loadAnnounced() {
+  try {
+    return new Set(JSON.parse(await readFile(ANNOUNCED_FILE, "utf8")));
+  } catch {
+    return null; // missing/unreadable → treat as first run
+  }
+}
+async function saveAnnounced() {
+  try {
+    await writeFile(ANNOUNCED_FILE, JSON.stringify([...announced]));
+  } catch (e) {
+    console.error("[announce] couldn't save state:", e.message);
+  }
+}
+
+function announcement(link) {
+  const filters = Array.isArray(link.filters) ? link.filters : [];
+  const roleIds = [];
+  for (const f of filters) {
+    const id = filterRoleMap.get(String(f).trim().toLowerCase());
+    if (id) roleIds.push(id);
+  }
+  const lines = ["🔓 **New link added!**", "```", link.url, "```"];
+  if (filters.length) lines.push(`Unblocked on: **${filters.join(", ")}**`);
+  else lines.push("_Run `/check all` on it in the filter-check channel to see what it clears._");
+  if (roleIds.length) lines.push(roleIds.map((id) => `<@&${id}>`).join(" "));
+  return { content: lines.join("\n"), allowedMentions: { roles: roleIds } };
+}
+
+async function announceNewLinks() {
+  if (!LINKS_CHANNEL_ID) return;
+  const links = await fetchMirrors();
+  if (!links.length) return;
+  if (announced === null) {
+    const loaded = await loadAnnounced();
+    if (loaded === null) {
+      // First run: adopt the current list silently so we don't spam-announce every
+      // existing link — only links added from here on get announced.
+      announced = new Set(links.map((l) => l.url));
+      await saveAnnounced();
+      console.log(`[announce] seeded ${announced.size} existing links (none announced on first run)`);
+      return;
+    }
+    announced = loaded;
+  }
+  const fresh = links.filter((l) => l.url && !announced.has(l.url));
+  if (!fresh.length) return;
+  const ch = await client.channels.fetch(LINKS_CHANNEL_ID).catch(() => null);
+  if (!ch || !ch.isTextBased?.()) {
+    return console.error("[announce] channel missing/not text — check LINKS_CHANNEL_ID + bot access");
+  }
+  for (const link of fresh) {
+    const ok = await ch
+      .send(announcement(link))
+      .then(() => true)
+      .catch((e) => (console.error("[announce] post failed:", e.message), false));
+    if (ok) announced.add(link.url);
+  }
+  await saveAnnounced();
+  console.log(`[announce] announced ${fresh.length} new link(s)`);
 }
 
 // Reachable = the server answers with ANY HTTP response (incl. the 401 gate).
@@ -514,6 +608,15 @@ client.once("ready", async () => {
     );
   } else {
     console.log("[status] STATUS_CHANNEL_ID not set — status board + checker disabled");
+  }
+
+  if (LINKS_CHANNEL_ID) {
+    await buildFilterRoleMap();
+    await announceNewLinks().catch((e) => console.error("[announce] first run failed:", e.message));
+    setInterval(() => announceNewLinks().catch(() => {}), Math.max(1, STATUS_INTERVAL_MIN) * 60000);
+    console.log(`[announce] watching for new links → channel ${LINKS_CHANNEL_ID}`);
+  } else {
+    console.log("[announce] LINKS_CHANNEL_ID not set — new-link auto-announce disabled");
   }
 });
 

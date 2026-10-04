@@ -31,6 +31,11 @@ services:
       STATUS_ALERT_CHANNEL_ID: ${STATUS_ALERT_CHANNEL_ID:-}
       STATUS_ALERT_ROLE_ID: ${STATUS_ALERT_ROLE_ID:-}
       STATUS_CONFIRM_THRESHOLD: ${STATUS_CONFIRM_THRESHOLD:-2}
+      # --- new-link auto-announce ---
+      LINKS_CHANNEL_ID: ${LINKS_CHANNEL_ID:-}
+      HALCYON_ANNOUNCED_FILE: /data/state/announced-links.json
     volumes:
       # the shared allowlist Caddy reads — /byod appends to it (rw)
       - ../domains.txt:/data/domains.txt
+      # persistent bot state (which links have already been announced)
+      - ./state:/data/state
