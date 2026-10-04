@@ -23,6 +23,7 @@ logs/
 .parcel-cache/
 dist/
 build/
+cloudfn/public/   # built front bundle (has the backend baked in — never commit)
 *.tsbuildinfo
 .eslintcache
 

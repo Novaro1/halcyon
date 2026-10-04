@@ -1,0 +1,9 @@
+{
+  "name": "halcyon-front-fn",
+  "version": "1.0.0",
+  "description": "Serves the Halcyon static front from a Cloud Function (run.app URL).",
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.4.0"
+  }
+}
