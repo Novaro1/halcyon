@@ -580,7 +580,7 @@ async function pollCycle() {
 const commands = [
   new SlashCommandBuilder()
     .setName("links")
-    .setDescription("Get the current working Halcyon links + passphrase"),
+    .setDescription("Get the current working Halcyon links"),
   new SlashCommandBuilder()
     .setName("status")
     .setDescription("Check which Halcyon links are reachable right now"),
@@ -685,8 +685,6 @@ client.on("interactionCreate", async (i) => {
         .setFooter({
           text: "Blocked at school? Try another — this list is always current.",
         });
-      if (PASSPHRASE)
-        embed.addFields({ name: "Passphrase", value: "`" + PASSPHRASE + "`" });
       await i.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     } else if (i.commandName === "status") {
       await i.deferReply({ flags: MessageFlags.Ephemeral });
