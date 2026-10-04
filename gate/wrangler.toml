@@ -21,10 +21,10 @@ LINKS_JSON = '[{"url":"https://storage.googleapis.com/studybuddy-static/index.ht
 #   SESSION_SECRET          any long random string (signs the login cookie)
 #   BOT_LINKS_SECRET        any long random string (lets the bot read /bot/links)
 
-# ---- Optional: KV store for links (no-redeploy updates) -------------------
-# 1) wrangler kv namespace create LINKS   (copy the id it prints)
-# 2) uncomment + paste the id below
-# 3) wrangler kv key put --binding=LINKS mirrors '[{"name":"Halcyon","url":"https://…","host":"afraid.org"}]'
-# [[kv_namespaces]]
-# binding = "LINKS"
-# id = "REPLACE_WITH_KV_ID"
+# ---- KV store for links (no-redeploy updates) -----------------------------
+# Links are read live from this namespace, so /addlink + /removelink in Discord
+# update them instantly with no `wrangler deploy`. LINKS_JSON above is the seed:
+# getLinks() falls back to it until the first write, which copies it into KV.
+[[kv_namespaces]]
+binding = "LINKS"
+id = "3835094ec3d640a48fab360761c6c5a9"

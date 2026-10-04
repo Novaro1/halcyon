@@ -34,7 +34,7 @@ export default {
         case "/logout":
           return logout(url);
         case "/bot/links":
-          return botLinks(url, env);
+          return botLinks(request, url, env);
         case "/":
           return root(request, url, env);
         default:
@@ -116,13 +116,67 @@ function logout(url) {
   return new Response(null, { status: 302, headers: h });
 }
 
-async function botLinks(url, env) {
+async function botLinks(request, url, env) {
   const key = url.searchParams.get("key");
   if (!env.BOT_LINKS_SECRET || key !== env.BOT_LINKS_SECRET)
     return new Response("unauthorized", { status: 401 });
-  return new Response(JSON.stringify({ mirrors: await getLinks(env) }), {
-    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-  });
+
+  const jres = (obj, status = 200) =>
+    new Response(JSON.stringify(obj), {
+      status,
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    });
+
+  // --- writes (add / remove a link) -------------------------------------
+  // POST { "op":"add", "link":{ "url":"https://…", "host":"…", "filters":["…"] } }
+  // POST { "op":"remove", "url":"https://… or host" }
+  // Links live in the LINKS KV namespace (read live by the gate — no redeploy).
+  if (request.method === "POST") {
+    if (!env.LINKS)
+      return jres({ error: "links KV not configured — bind a LINKS namespace" }, 500);
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return jres({ error: "invalid JSON body" }, 400);
+    }
+    const norm = (u) => String(u || "").replace(/\/+$/, "").toLowerCase();
+    let links = await getLinks(env); // seeds from LINKS_JSON on the first write
+
+    if (body.op === "add") {
+      const link = body.link || {};
+      if (!link.url || !/^https?:\/\//i.test(link.url))
+        return jres({ error: "link.url must be an http(s) URL" }, 400);
+      if (!link.host) {
+        try {
+          link.host = new URL(link.url).hostname;
+        } catch {}
+      }
+      if (link.filters != null && !Array.isArray(link.filters))
+        return jres({ error: "link.filters must be an array" }, 400);
+      if (Array.isArray(link.filters))
+        link.filters = link.filters.map((f) => String(f).trim()).filter(Boolean);
+      links = links.filter((m) => norm(m.url) !== norm(link.url)); // de-dupe by url
+      links.push(link);
+      await env.LINKS.put("mirrors", JSON.stringify(links));
+      return jres({ ok: true, link, count: links.length });
+    }
+
+    if (body.op === "remove") {
+      const target = norm(body.url);
+      const targetHost = String(body.url || "").toLowerCase();
+      const before = links.length;
+      links = links.filter(
+        (m) => norm(m.url) !== target && String(m.host || "").toLowerCase() !== targetHost
+      );
+      await env.LINKS.put("mirrors", JSON.stringify(links));
+      return jres({ ok: true, removed: before - links.length, count: links.length });
+    }
+
+    return jres({ error: "unknown op (use add|remove)" }, 400);
+  }
+
+  return jres({ mirrors: await getLinks(env) });
 }
 
 /* --------------------------------------------------------------- links ----- */

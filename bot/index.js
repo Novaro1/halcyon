@@ -22,6 +22,7 @@ import {
   REST,
   Routes,
   SlashCommandBuilder,
+  PermissionFlagsBits,
   EmbedBuilder,
   MessageFlags,
   ActionRowBuilder,
@@ -102,6 +103,25 @@ async function fetchMirrors() {
     return Array.isArray(d.mirrors) ? d.mirrors : [];
   } catch {
     return [];
+  }
+}
+
+// Add/remove a link by POSTing to the gate's /bot/links (same URL + ?key= as
+// LINKS_URL). The gate writes it to KV, read live — so no redeploy, no VPS.
+async function writeLink(op, payload) {
+  if (!/\/bot\/links/.test(LINKS_URL))
+    return { ok: false, error: "LINKS_URL isn't the gate /bot/links endpoint — can't write" };
+  try {
+    const r = await fetch(LINKS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ op, ...payload }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) return { ok: false, error: d.error || `HTTP ${r.status}` };
+    return { ok: true, ...d };
+  } catch (e) {
+    return { ok: false, error: e.message };
   }
 }
 
@@ -578,6 +598,29 @@ const commands = [
           o.setName("share").setDescription("Also list it in community-links for everyone?").setRequired(false)
         )
     ),
+  new SlashCommandBuilder()
+    .setName("addlink")
+    .setDescription("Add a Halcyon link to the list (staff)")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addStringOption((o) =>
+      o.setName("url").setDescription("Full link, e.g. https://storage.googleapis.com/mybucket/index.html").setRequired(true)
+    )
+    .addStringOption((o) =>
+      o
+        .setName("filters")
+        .setDescription("Filters it beats, comma-separated, e.g. GoGuardian, Linewize")
+        .setRequired(false)
+    )
+    .addStringOption((o) =>
+      o.setName("host").setDescription("Override the host shown (auto-detected from the URL if blank)").setRequired(false)
+    ),
+  new SlashCommandBuilder()
+    .setName("removelink")
+    .setDescription("Remove a Halcyon link from the list (staff)")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addStringOption((o) =>
+      o.setName("url").setDescription("The link's URL or host to remove").setRequired(true)
+    ),
 ].map((c) => c.toJSON());
 
 async function registerCommands() {
@@ -663,6 +706,38 @@ client.on("interactionCreate", async (i) => {
       await i.editReply({ embeds: [embed] });
     } else if (i.commandName === "byod") {
       if (i.options.getSubcommand() === "add") await handleByodAdd(i);
+    } else if (i.commandName === "addlink") {
+      await i.deferReply({ flags: MessageFlags.Ephemeral });
+      const url = i.options.getString("url").trim();
+      if (!/^https?:\/\//i.test(url))
+        return i.editReply("❌ That doesn't look like a URL — it must start with `https://`.");
+      const host = (i.options.getString("host") || "").trim();
+      const filters = (i.options.getString("filters") || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const link = { url };
+      if (host) link.host = host;
+      if (filters.length) link.filters = filters;
+      const res = await writeLink("add", { link });
+      if (!res.ok) return i.editReply(`❌ Couldn't add it: ${res.error}`);
+      await i.editReply(
+        `✅ Added **${res.link.url}**` +
+          (res.link.filters?.length ? `\nBeats: **${res.link.filters.join(", ")}**` : "") +
+          `\n_${res.count} link(s) total. It's live now; auto-announce will post it to <#${LINKS_CHANNEL_ID || "the links channel"}> shortly._`
+      );
+      // post it to #which-link right away instead of waiting for the next sweep
+      if (LINKS_CHANNEL_ID) announceNewLinks().catch(() => {});
+    } else if (i.commandName === "removelink") {
+      await i.deferReply({ flags: MessageFlags.Ephemeral });
+      const url = i.options.getString("url").trim();
+      const res = await writeLink("remove", { url });
+      if (!res.ok) return i.editReply(`❌ Couldn't remove it: ${res.error}`);
+      await i.editReply(
+        res.removed
+          ? `🗑️ Removed **${url}** (${res.count} link(s) left).`
+          : `⚠️ No link matched **${url}** — nothing removed.`
+      );
     }
   } catch (err) {
     console.error("interaction error:", err);
