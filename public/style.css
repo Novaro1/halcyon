@@ -98,16 +98,20 @@ input, select { font-family: inherit; }
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background: var(--grad);
+  background:
+    radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 52%),
+    var(--grad);
   position: relative;
   animation: orbGlow 5s ease-in-out infinite alternate;
 }
+/* The brand mark (sun over calm water) sits on the gradient orb, so the hero,
+   dock tile and loader all carry the same logo as the favicon. */
 .orb::after {
   content: "";
   position: absolute;
-  inset: 22%;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0) 60%);
+  inset: 0;
+  border-radius: inherit;
+  background: url("assets/mark.svg") center / 80% no-repeat;
 }
 @keyframes orbGlow {
   from { box-shadow: 0 0 14px rgba(31, 209, 163, 0.4), 0 0 24px rgba(255, 138, 76, 0.18), inset 0 0 12px rgba(255, 255, 255, 0.3); }

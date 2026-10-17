@@ -1,15 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <defs>
-    <linearGradient id="orb" x1="0.12" y1="0.1" x2="0.88" y2="0.92">
-      <stop offset="0" stop-color="#1fd1a3"/>
-      <stop offset="0.52" stop-color="#ffd27a"/>
+    <linearGradient id="hal" x1="6" y1="6" x2="58" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2bd9ad"/>
+      <stop offset=".5" stop-color="#ffd27a"/>
       <stop offset="1" stop-color="#ff8a4c"/>
     </linearGradient>
-    <radialGradient id="gloss" cx="0.35" cy="0.3" r="0.55">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.9"/>
-      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0"/>
-    </radialGradient>
   </defs>
-  <rect x="2" y="2" width="44" height="44" rx="12" fill="url(#orb)"/>
-  <rect x="2" y="2" width="44" height="44" rx="12" fill="url(#gloss)"/>
+  <rect width="64" height="64" rx="15" fill="url(#hal)"/>
+  <circle cx="32" cy="26" r="9" fill="#0b2620"/>
+  <g stroke="#0b2620" stroke-width="4" stroke-linecap="round" fill="none">
+    <path d="M12 42 C 18 37, 24 37, 32 42 S 46 47, 52 42"/>
+    <path d="M18 50 C 22 46.5, 27 46.5, 32 50 S 42 53.5, 46 50"/>
+  </g>
 </svg>

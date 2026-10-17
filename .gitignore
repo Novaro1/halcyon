@@ -46,3 +46,5 @@ Thumbs.db
 *~
 bot/state/
 firebase/public/   # built front bundle (backend baked in — never commit)
+aws/public/   # built front bundle (backend baked in — never commit)
+firebase/.firebase/
