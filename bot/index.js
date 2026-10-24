@@ -63,6 +63,20 @@ const STATUS_ALERT_ROLE_ID = process.env.STATUS_ALERT_ROLE_ID || "";
 // How many polls in a row a new state must hold before it's alerted (anti-flap).
 const STATUS_CONFIRM = Number(process.env.STATUS_CONFIRM_THRESHOLD || 2);
 
+// --- Weekly heartbeat ---
+// A once-a-week community "check-in" post (links up, member count, a friendly
+// nudge) so the server keeps a visible pulse. Unlike the live #status board,
+// this is a NEW message each week. Defaults to the #status channel because the
+// bot can always post there; point HEARTBEAT_CHANNEL_ID elsewhere for more reach.
+const HEARTBEAT_CHANNEL_ID = process.env.HEARTBEAT_CHANNEL_ID || STATUS_CHANNEL_ID;
+const HEARTBEAT_DAY = Number(process.env.HEARTBEAT_DAY ?? 0);    // 0=Sun .. 6=Sat (UTC)
+const HEARTBEAT_HOUR = Number(process.env.HEARTBEAT_HOUR ?? 21); // hour of day, UTC
+const HEARTBEAT_ROLE_ID = process.env.HEARTBEAT_ROLE_ID || "";   // optional @mention; blank = no ping
+const HEARTBEAT_FILE = process.env.HALCYON_HEARTBEAT_FILE || "/data/state/heartbeat.json";
+const HEARTBEAT_ENABLED = String(process.env.HEARTBEAT_ENABLED ?? "1") !== "0";
+const HEARTBEAT_TEST = String(process.env.HEARTBEAT_TEST ?? "0") === "1"; // fire once on boot (verify)
+let heartbeatLastDate = null; // "YYYY-MM-DD" (UTC) of the last fire, persisted
+
 // --- Auto-announce new links ---
 // When a new link appears in the list, post it to this channel with the filters
 // it's unblocked on and @mention the matching "Filter: <name>" roles. Blank = off.
@@ -575,6 +589,67 @@ async function pollCycle() {
   }
 }
 
+// ----------------------------------------------------------------- heartbeat ---
+// A weekly "we're alive, links are up" digest. Fires once on HEARTBEAT_DAY at or
+// after HEARTBEAT_HOUR (UTC). The firing date is persisted so a restart can't
+// double-post and a window missed by a short outage still catches up that day.
+async function loadHeartbeatDate() {
+  try { return JSON.parse(await readFile(HEARTBEAT_FILE, "utf8")).lastDate || ""; }
+  catch { return ""; }
+}
+async function saveHeartbeatDate(d) {
+  try { await writeFile(HEARTBEAT_FILE, JSON.stringify({ lastDate: d })); }
+  catch (e) { console.error("[heartbeat] couldn't save state:", e.message); }
+}
+async function postHeartbeat() {
+  if (!HEARTBEAT_CHANNEL_ID) return;
+  const ch = await client.channels.fetch(HEARTBEAT_CHANNEL_ID).catch(() => null);
+  if (!ch || !ch.isTextBased?.()) {
+    return console.error("[heartbeat] channel missing/not text — check HEARTBEAT_CHANNEL_ID (defaults to STATUS_CHANNEL_ID)");
+  }
+  let total = 0, up = 0;
+  try { const s = await probeAll(); total = s.results.length; up = s.results.filter((r) => r.state === UP).length; }
+  catch { /* network hiccup — counts stay 0, message still goes out */ }
+  let members = null;
+  if (GUILD_ID) {
+    const g = client.guilds.cache.get(GUILD_ID) || (await client.guilds.fetch(GUILD_ID).catch(() => null));
+    members = g?.memberCount ?? null;
+  }
+  const statusLine =
+    total === 0
+      ? "🟢 links are being set up — check back soon"
+      : up >= total
+      ? `🟢 **all ${total} links are live** — grab them with \`/links\``
+      : `🟠 **${up}/${total} links live right now** — \`/links\` always shows the ones that work`;
+  const memberLine = members != null ? `👥 **${members} members** in the crew\n` : "";
+  const ping = HEARTBEAT_ROLE_ID ? ` <@&${HEARTBEAT_ROLE_ID}>` : "";
+  const content =
+    "## 💓 Halcyon weekly check-in\n" +
+    statusLine + "\n" +
+    memberLine +
+    "🛡️ gate and filters running clean\n\n" +
+    `blocked somewhere new this week? you've got ${total || "your"} backups in \`/links\`. ` +
+    "found a dead link or got an idea? drop it in suggestions and we'll jump on it 🙏" +
+    (ping ? `\n${ping}` : "");
+  await ch
+    .send({
+      content,
+      allowedMentions: HEARTBEAT_ROLE_ID ? { roles: [HEARTBEAT_ROLE_ID] } : { parse: [] },
+    })
+    .then(() => console.log(`[heartbeat] posted in #${ch.name}`))
+    .catch((e) => console.error("[heartbeat] post failed:", e.message));
+}
+async function heartbeatTick() {
+  if (!HEARTBEAT_ENABLED || !HEARTBEAT_CHANNEL_ID) return;
+  const now = new Date();
+  if (now.getUTCDay() !== HEARTBEAT_DAY || now.getUTCHours() < HEARTBEAT_HOUR) return;
+  const key = now.toISOString().slice(0, 10); // the target day's date (UTC)
+  if (heartbeatLastDate === key) return;
+  heartbeatLastDate = key;
+  await saveHeartbeatDate(key);
+  await postHeartbeat();
+}
+
 // ------------------------------------------------------------------ commands ---
 
 const commands = [
@@ -660,6 +735,19 @@ client.once("ready", async () => {
     console.log(`[announce] watching for new links → channel ${LINKS_CHANNEL_ID}`);
   } else {
     console.log("[announce] LINKS_CHANNEL_ID not set — new-link auto-announce disabled");
+  }
+
+  if (HEARTBEAT_ENABLED && HEARTBEAT_CHANNEL_ID) {
+    heartbeatLastDate = await loadHeartbeatDate();
+    if (HEARTBEAT_TEST) {
+      console.log("[heartbeat] HEARTBEAT_TEST=1 — posting one check-in now");
+      await postHeartbeat().catch((e) => console.error("[heartbeat] test post failed:", e.message));
+    }
+    await heartbeatTick().catch(() => {}); // catch up if we booted into the weekly window
+    setInterval(() => heartbeatTick().catch(() => {}), 20 * 60000); // re-check every 20m
+    console.log(`[heartbeat] weekly check-in → channel ${HEARTBEAT_CHANNEL_ID}, day ${HEARTBEAT_DAY} @ ${HEARTBEAT_HOUR}:00 UTC`);
+  } else {
+    console.log("[heartbeat] disabled (set HEARTBEAT_CHANNEL_ID or STATUS_CHANNEL_ID)");
   }
 });
 

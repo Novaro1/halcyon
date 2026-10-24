@@ -34,6 +34,14 @@ services:
       # --- new-link auto-announce ---
       LINKS_CHANNEL_ID: ${LINKS_CHANNEL_ID:-}
       HALCYON_ANNOUNCED_FILE: /data/state/announced-links.json
+      # --- weekly heartbeat (community check-in; defaults to the #status channel) ---
+      HEARTBEAT_CHANNEL_ID: ${HEARTBEAT_CHANNEL_ID:-}
+      HEARTBEAT_DAY: ${HEARTBEAT_DAY:-0}
+      HEARTBEAT_HOUR: ${HEARTBEAT_HOUR:-21}
+      HEARTBEAT_ROLE_ID: ${HEARTBEAT_ROLE_ID:-}
+      HEARTBEAT_ENABLED: ${HEARTBEAT_ENABLED:-1}
+      HEARTBEAT_TEST: ${HEARTBEAT_TEST:-0}
+      HALCYON_HEARTBEAT_FILE: /data/state/heartbeat.json
     volumes:
       # the shared allowlist Caddy reads — /byod appends to it (rw)
       - ../domains.txt:/data/domains.txt
