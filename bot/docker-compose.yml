@@ -47,3 +47,9 @@ services:
       - ../domains.txt:/data/domains.txt
       # persistent bot state (which links have already been announced)
       - ./state:/data/state
+    # The OVH hostname is this box's OWN public name. From inside the container it
+    # resolves to the public IP and can't hairpin back, so the health probe would
+    # falsely flag it down. Point it at the host so the bot checks it via the local
+    # Caddy (which serves that host's cert + the gate), matching what students see.
+    extra_hosts:
+      - "vps-aef380a6.vps.ovh.us:host-gateway"
