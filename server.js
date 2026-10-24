@@ -661,29 +661,49 @@ function loginPage(error = false) {
 // mint the session cookie, then reloads into the app. Fully self-contained — no
 // external scripts, no gated app assets — so it renders on any front host.
 function gatePage() {
-  return `<!doctype html><html><head><meta charset="utf-8"/>
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <meta name="robots" content="noindex"/><title>Halcyon</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,900;1,9..144,500&family=Hanken+Grotesk:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
   :root{color-scheme:dark}*{box-sizing:border-box}
-  body{margin:0;height:100vh;display:grid;place-items:center;
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#f4eee1;
-    background:radial-gradient(1000px 600px at 20% 0%,rgba(31,209,163,.16),transparent 60%),
-    radial-gradient(900px 500px at 100% 20%,rgba(255,138,76,.12),transparent 55%),#040b09}
-  .card{width:320px;padding:34px 30px;border-radius:22px;text-align:center;
-    background:rgba(255,250,240,.05);border:1px solid rgba(255,250,240,.12);
-    backdrop-filter:blur(20px);box-shadow:0 24px 60px rgba(0,0,0,.5)}
-  .orb{width:44px;height:44px;border-radius:50%;margin:0 auto 16px;
-    background:linear-gradient(118deg,#1fd1a3,#ffd27a,#ff8a4c);box-shadow:0 0 18px rgba(31,209,163,.5);
-    animation:pulse 1.4s ease-in-out infinite}
-  @keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.84);opacity:.65}}
-  h1{font-size:22px;margin:0 0 6px;letter-spacing:-.5px}
-  p{color:#9ba79a;font-size:13px;margin:0;min-height:1.2em}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;
+    font-family:"Hanken Grotesk",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#f4eee1;
+    background:
+      radial-gradient(1100px 680px at 16% -8%,rgba(31,209,163,.18),transparent 58%),
+      radial-gradient(980px 560px at 112% 10%,rgba(255,138,76,.14),transparent 55%),
+      radial-gradient(760px 700px at 50% 122%,rgba(255,210,122,.08),transparent 60%),
+      #050d0b}
+  .card{position:relative;width:min(92vw,352px);padding:46px 40px 40px;border-radius:26px;text-align:center;
+    background:linear-gradient(180deg,rgba(255,250,240,.055),rgba(255,250,240,.018));
+    border:1px solid rgba(255,250,240,.1);
+    box-shadow:0 30px 80px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.06);
+    animation:rise .7s cubic-bezier(.22,1,.36,1) both}
+  @keyframes rise{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
+  .gorb{width:64px;height:64px;border-radius:18px;margin:0 auto 20px;display:grid;place-items:center;
+    background:linear-gradient(135deg,#2bd9ad,#ffd27a 52%,#ff8a4c);
+    box-shadow:0 12px 30px rgba(31,209,163,.32),0 8px 20px rgba(255,138,76,.22);
+    animation:float 3.4s ease-in-out infinite}
+  .gorb svg{width:76%;height:76%;display:block}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+  h1{font-family:"Fraunces",Georgia,serif;font-weight:900;font-size:36px;line-height:1;margin:0 0 9px;
+    letter-spacing:-.02em;background:linear-gradient(108deg,#34f0be,#ffd27a 52%,#ff8a4c);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .tag{font-family:"Fraunces",Georgia,serif;font-style:italic;font-weight:500;font-size:14.5px;color:#9ba79a;margin:0 0 24px}
+  p#s{color:#8b988c;font-size:12.5px;letter-spacing:.02em;margin:0;min-height:1.2em}
+  .bar{position:relative;width:128px;height:3px;margin:18px auto 0;border-radius:3px;background:rgba(255,250,240,.08);overflow:hidden}
+  .bar::after{content:"";position:absolute;top:0;bottom:0;left:0;width:42%;border-radius:3px;
+    background:linear-gradient(90deg,transparent,#34f0be,#ffd27a,transparent);animation:slide 1.5s ease-in-out infinite}
+  @keyframes slide{0%{transform:translateX(-120%)}100%{transform:translateX(320%)}}
+  @media (prefers-reduced-motion:reduce){.card,.gorb,.bar::after{animation:none}}
 </style></head><body>
 <div class="card">
-  <div class="orb"></div>
+  <div class="gorb"><svg viewBox="0 0 64 64"><circle cx="32" cy="26" r="9" fill="#0b2620"/><g stroke="#0b2620" stroke-width="4" stroke-linecap="round" fill="none"><path d="M12 42 C 18 37 24 37 32 42 S 46 47 52 42"/><path d="M18 50 C 22 46.5 27 46.5 32 50 S 42 53.5 46 50"/></g></svg></div>
   <h1>Halcyon</h1>
+  <p class="tag">A calm window on the open web.</p>
   <p id="s">Checking your browser…</p>
+  <div class="bar"></div>
 </div>
 <script>
 (function(){
