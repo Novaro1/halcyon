@@ -1,8 +1,10 @@
 // Halcyon Discord bot — "links via Discord only" distribution + self-serve BYOD.
 //
-// Slash commands (all reply privately/ephemerally):
-//   /links       → the current working domains + the access passphrase
-//   /status      → live reachability check of each domain
+// Slash commands:
+//   /links       → the current working domains + the access passphrase (ephemeral)
+//   /status      → live reachability check of each domain (ephemeral)
+//   /check <url> → which school filters block/clear a link, via the Filter Fleet
+//                  (public reply; Tier-1 checks by default, full:true for all)
 //   /byod add    → a verified member turns a domain THEY own into a Halcyon mirror
 //
 // It also runs an auto-updating #status board (STATUS_CHANNEL_ID) with a
@@ -87,6 +89,34 @@ const ANNOUNCED_FILE = process.env.HALCYON_ANNOUNCED_FILE || "/data/state/announ
 const GATE_URL =
   process.env.HALCYON_GATE_URL ||
   (() => { try { return new URL(LINKS_URL).origin; } catch { return ""; } })();
+// --- Filter Fleet /check ---
+// /check <url> queries the user's own filter-checker fleet (the Filter Fleet API)
+// and shows which school filters block vs clear the domain — the in-house version
+// of running Solar's `/check all`. The fleet is keyed + quota-limited, so the key
+// lives here server-side (never exposed to members) and should be a DEDICATED fleet
+// key so its usage is attributable and revocable on its own.
+const FLEET_URL = process.env.FLEET_URL || "";   // e.g. https://filter-fleet-xxxx.run.app
+const FLEET_KEY = process.env.FLEET_KEY || "";    // a dedicated fleet API key
+// Default run = the Tier-1 vendor-global checkers only: canonical + reliable, and
+// cheaper on the fleet's per-hour quota than the full 13. `/check full:true` runs
+// the fleet's whole default set (adds Linewize + the Tier-3 single-district ones,
+// which can drift). paloalto is never requested (opt-in, slow, needs Okta creds).
+const FLEET_TIER1 = ["fortiguard", "cisco", "deledao", "senso", "blocksi-web", "blocksi-ai", "goguardian", "lightspeed", "securly"];
+// Optional: restrict /check to one channel (e.g. #filter-check). Blank = anywhere.
+const CHECK_CHANNEL_ID = process.env.CHECK_CHANNEL_ID || "";
+// Per-user throttle so a few members can't drain the fleet's hourly quota. The
+// fleet's own 10-min verdict cache makes repeat checks of the same link free.
+const CHECK_COOLDOWN_MS = Number(process.env.CHECK_COOLDOWN_SEC || 15) * 1000;
+const CHECK_MAX_PER_HOUR = Number(process.env.CHECK_MAX_PER_HOUR || 8);
+// Pretty names for the fleet's checker ids.
+const FLEET_NAMES = {
+  fortiguard: "FortiGuard", cisco: "Cisco Umbrella", deledao: "Deledao", senso: "Senso",
+  "blocksi-web": "Blocksi", "blocksi-ai": "Blocksi AI", goguardian: "GoGuardian",
+  lightspeed: "Lightspeed", securly: "Securly", linewize: "Linewize", paloalto: "Palo Alto",
+  iboss: "iBoss", lanschool: "LanSchool", aristotle: "AristotleK12",
+};
+const fleetName = (id) => FLEET_NAMES[id] || id;
+
 // Sites known to not (fully) work through the Scramjet proxy.
 const KNOWN_BROKEN = [
   { rx: /(^|\.)youtube\.com$/, note: "YouTube video playback is unreliable through the proxy (SABR streaming)" },
@@ -463,6 +493,133 @@ async function checkLink(raw) {
   return `✅ **${host}** is online and should **work through Halcyon**. Open a mirror from **/links**, log in, and paste the link into the address bar.`;
 }
 
+// ---- /check: query the Filter Fleet for a domain's filter verdicts -----------
+// Per-user throttle: a short cooldown + an hourly cap, independent of BYOD.
+const checkRl = new Map(); // userId -> [timestamps ms]
+function checkRate(userId) {
+  const now = Date.now();
+  const hits = (checkRl.get(userId) || []).filter((t) => now - t < 3600_000);
+  checkRl.set(userId, hits);
+  const last = hits[hits.length - 1];
+  if (last && now - last < CHECK_COOLDOWN_MS) {
+    return { ok: false, msg: `⏳ One sec — try again in ${Math.ceil((CHECK_COOLDOWN_MS - (now - last)) / 1000)}s.` };
+  }
+  if (hits.length >= CHECK_MAX_PER_HOUR) {
+    const mins = Math.max(1, Math.ceil((3600_000 - (now - hits[0])) / 60_000));
+    return { ok: false, msg: `⏳ You've used your ${CHECK_MAX_PER_HOUR} checks this hour. Try again in ~${mins}m.` };
+  }
+  return { ok: true };
+}
+function checkRecord(userId) {
+  const hits = checkRl.get(userId) || [];
+  hits.push(Date.now());
+  checkRl.set(userId, hits);
+}
+
+// Call the fleet. `full` = the fleet's whole default set; otherwise Tier-1 only.
+async function fleetCheck(domain, { full = false } = {}) {
+  if (!FLEET_URL || !FLEET_KEY) return { ok: false, error: "not_configured" };
+  let u;
+  try {
+    u = new URL("/api/check", FLEET_URL);
+  } catch {
+    return { ok: false, error: "bad_fleet_url" };
+  }
+  u.searchParams.set("url", domain);
+  if (!full) u.searchParams.set("checker", FLEET_TIER1.join(","));
+  try {
+    const r = await fetch(u, { headers: { "x-api-key": FLEET_KEY }, signal: AbortSignal.timeout(45000) });
+    const d = await r.json().catch(() => ({}));
+    if (r.status === 429) return { ok: false, error: "quota" };
+    if (r.status === 401) return { ok: false, error: "unauthorized" };
+    if (!r.ok) return { ok: false, error: d.error || `HTTP ${r.status}` };
+    return { ok: true, data: d };
+  } catch (e) {
+    return { ok: false, error: e.name === "TimeoutError" ? "timeout" : e.message };
+  }
+}
+
+// Turn a fleet response into an embed: clears / blocked / couldn't-check, grouped.
+function fleetEmbed(domain, data, { full }) {
+  const rows = Array.isArray(data.results) ? data.results : [];
+  const okRows = rows.filter((r) => r.ok);
+  const clears = okRows.filter((r) => !r.blocked);
+  const blocked = okRows.filter((r) => r.blocked);
+  const errored = rows.filter((r) => !r.ok);
+  const anyCached = rows.some((r) => r.cached);
+
+  const color =
+    okRows.length === 0 ? BRAND : blocked.length === 0 ? 0x57f287 : clears.length === 0 ? 0xed4245 : 0xfee75c;
+
+  const head =
+    okRows.length === 0
+      ? "Couldn't get a verdict from any checker right now."
+      : blocked.length === 0
+      ? `🟢 **Clears every checker** (${clears.length}/${okRows.length}) — a strong pick.`
+      : clears.length === 0
+      ? `🔴 **Blocked everywhere** (${blocked.length}/${okRows.length}).`
+      : `🟡 **Clears ${clears.length}/${okRows.length}** — works on some filters, not others.`;
+
+  const lines = [head, ""];
+  if (clears.length) lines.push(`✅ **Clears:** ${clears.map((r) => fleetName(r.checker)).join(", ")}`);
+  if (blocked.length) lines.push(`🚫 **Blocked by:** ${blocked.map((r) => fleetName(r.checker)).join(", ")}`);
+  if (errored.length) lines.push(`⚠️ **Couldn't check:** ${errored.map((r) => fleetName(r.checker)).join(", ")}`);
+
+  const foot = full
+    ? "Full fleet · Tier-3 (iBoss/LanSchool/Aristotle) read one district and can drift"
+    : "Tier-1 vendor checks · run again with full:true for the whole fleet";
+
+  return new EmbedBuilder()
+    .setColor(color)
+    .setTitle(`🔎 Filter check — ${domain}`)
+    .setDescription(lines.join("\n"))
+    .setFooter({ text: foot + (anyCached ? " · 🔁 cached" : "") });
+}
+
+async function handleCheck(i) {
+  if (CHECK_CHANNEL_ID && i.channelId !== CHECK_CHANNEL_ID) {
+    return i.reply({ content: `Use this in <#${CHECK_CHANNEL_ID}>.`, flags: MessageFlags.Ephemeral });
+  }
+  if (MEMBER_ROLE_ID && i.inGuild() && !memberHasRole(i.member, MEMBER_ROLE_ID)) {
+    return i.reply({
+      content: "🔒 Verify as a member first, then you can check links.",
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+  if (!FLEET_URL || !FLEET_KEY) {
+    return i.reply({ content: "⚠️ The link checker isn't set up yet — ping staff.", flags: MessageFlags.Ephemeral });
+  }
+
+  const domain = normalizeDomain(i.options.getString("url") || "");
+  if (!isValidDomain(domain)) {
+    return i.reply({
+      content: `❌ \`${i.options.getString("url")}\` doesn't look like a domain. Try \`example.com\`.`,
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const rate = checkRate(i.user.id);
+  if (!rate.ok) return i.reply({ content: rate.msg, flags: MessageFlags.Ephemeral });
+
+  const full = i.options.getBoolean("full") || false;
+  checkRecord(i.user.id);
+  await i.deferReply(); // public — seeing each other's checks keeps the channel active
+
+  const res = await fleetCheck(domain, { full });
+  if (!res.ok) {
+    const msg =
+      res.error === "quota"
+        ? "⏳ The checker's at its limit for now — give it a few minutes and try again."
+        : res.error === "timeout"
+        ? "⚠️ The checker took too long to answer — try again in a moment."
+        : res.error === "unauthorized" || res.error === "not_configured" || res.error === "bad_fleet_url"
+        ? "⚠️ The link checker isn't set up right — ping staff."
+        : `⚠️ Couldn't check that right now (${res.error}).`;
+    return i.editReply(msg);
+  }
+  await i.editReply({ embeds: [fleetEmbed(domain, res.data, { full })] });
+}
+
 function buildCheckModal() {
   return new ModalBuilder()
     .setCustomId("halcyon_check_modal")
@@ -660,6 +817,15 @@ const commands = [
     .setName("status")
     .setDescription("Check which Halcyon links are reachable right now"),
   new SlashCommandBuilder()
+    .setName("check")
+    .setDescription("Check which school filters block or clear a link")
+    .addStringOption((o) =>
+      o.setName("url").setDescription("A domain or link, e.g. cool-game.io").setRequired(true)
+    )
+    .addBooleanOption((o) =>
+      o.setName("full").setDescription("Run the whole fleet (slower, adds single-district checks)").setRequired(false)
+    ),
+  new SlashCommandBuilder()
     .setName("byod")
     .setDescription("Bring your own domain — turn a domain you own into a Halcyon mirror")
     .addSubcommand((sc) =>
@@ -737,6 +903,14 @@ client.once("ready", async () => {
     console.log("[announce] LINKS_CHANNEL_ID not set — new-link auto-announce disabled");
   }
 
+  console.log(
+    FLEET_URL && FLEET_KEY
+      ? `[check] /check live → fleet ${new URL(FLEET_URL).host}` +
+          (CHECK_CHANNEL_ID ? `, channel ${CHECK_CHANNEL_ID}` : ", any channel") +
+          `, ${CHECK_MAX_PER_HOUR}/user/hr`
+      : "[check] /check disabled — set FLEET_URL + FLEET_KEY"
+  );
+
   if (HEARTBEAT_ENABLED && HEARTBEAT_CHANNEL_ID) {
     heartbeatLastDate = await loadHeartbeatDate();
     if (HEARTBEAT_TEST) {
@@ -798,6 +972,8 @@ client.on("interactionCreate", async (i) => {
         .setTitle(`Halcyon — link status (${up}/${results.length} healthy)`)
         .setDescription(rows.join("\n") || "_No links configured._");
       await i.editReply({ embeds: [embed] });
+    } else if (i.commandName === "check") {
+      await handleCheck(i);
     } else if (i.commandName === "byod") {
       if (i.options.getSubcommand() === "add") await handleByodAdd(i);
     } else if (i.commandName === "addlink") {

@@ -34,6 +34,13 @@ services:
       # --- new-link auto-announce ---
       LINKS_CHANNEL_ID: ${LINKS_CHANNEL_ID:-}
       HALCYON_ANNOUNCED_FILE: /data/state/announced-links.json
+      # --- /check (Filter Fleet) ---
+      # Use a DEDICATED fleet API key so the bot's usage is attributable + revocable.
+      FLEET_URL: ${FLEET_URL:-}
+      FLEET_KEY: ${FLEET_KEY:-}
+      CHECK_CHANNEL_ID: ${CHECK_CHANNEL_ID:-}
+      CHECK_COOLDOWN_SEC: ${CHECK_COOLDOWN_SEC:-15}
+      CHECK_MAX_PER_HOUR: ${CHECK_MAX_PER_HOUR:-8}
       # --- weekly heartbeat (community check-in; defaults to the #status channel) ---
       HEARTBEAT_CHANNEL_ID: ${HEARTBEAT_CHANNEL_ID:-}
       HEARTBEAT_DAY: ${HEARTBEAT_DAY:-0}
