@@ -4,7 +4,7 @@
 //   /links       → the current working domains + the access passphrase (ephemeral)
 //   /status      → live reachability check of each domain (ephemeral)
 //   /check <url> → which school filters block/clear a link, via the Filter Fleet
-//                  (public reply; Tier-1 checks by default, full:true for all)
+//                  (public reply; runs the full 13-checker fleet)
 //   /byod add    → a verified member turns a domain THEY own into a Halcyon mirror
 //
 // It also runs an auto-updating #status board (STATUS_CHANNEL_ID) with a
@@ -97,11 +97,10 @@ const GATE_URL =
 // key so its usage is attributable and revocable on its own.
 const FLEET_URL = process.env.FLEET_URL || "";   // e.g. https://filter-fleet-xxxx.run.app
 const FLEET_KEY = process.env.FLEET_KEY || "";    // a dedicated fleet API key
-// Default run = the Tier-1 vendor-global checkers only: canonical + reliable, and
-// cheaper on the fleet's per-hour quota than the full 13. `/check full:true` runs
-// the fleet's whole default set (adds Linewize + the Tier-3 single-district ones,
-// which can drift). paloalto is never requested (opt-in, slow, needs Okta creds).
-const FLEET_TIER1 = ["fortiguard", "cisco", "deledao", "senso", "blocksi-web", "blocksi-ai", "goguardian", "lightspeed", "securly"];
+// /check runs the fleet's whole default set — all 13 non-opt-in checkers
+// (Tier-1 vendor-global + Linewize + the Tier-3 single-district ones). paloalto
+// is never requested (opt-in, slow, needs Okta creds). ~13 quota runs per fresh
+// check; the fleet's 10-min cache makes repeat checks of the same link free.
 // Optional: restrict /check to one channel (e.g. #filter-check). Blank = anywhere.
 const CHECK_CHANNEL_ID = process.env.CHECK_CHANNEL_ID || "";
 // Per-user throttle so a few members can't drain the fleet's hourly quota. The
@@ -516,8 +515,8 @@ function checkRecord(userId) {
   checkRl.set(userId, hits);
 }
 
-// Call the fleet. `full` = the fleet's whole default set; otherwise Tier-1 only.
-async function fleetCheck(domain, { full = false } = {}) {
+// Call the fleet for all 13 default checkers (no checker= param).
+async function fleetCheck(domain) {
   if (!FLEET_URL || !FLEET_KEY) return { ok: false, error: "not_configured" };
   let u;
   try {
@@ -526,7 +525,7 @@ async function fleetCheck(domain, { full = false } = {}) {
     return { ok: false, error: "bad_fleet_url" };
   }
   u.searchParams.set("url", domain);
-  if (!full) u.searchParams.set("checker", FLEET_TIER1.join(","));
+  // no checker param → the fleet's full default set (all 13 non-opt-in checkers)
   try {
     const r = await fetch(u, { headers: { "x-api-key": FLEET_KEY }, signal: AbortSignal.timeout(45000) });
     const d = await r.json().catch(() => ({}));
@@ -546,7 +545,7 @@ function shorten(s, n = 46) {
   return s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s;
 }
 
-function fleetEmbed(domain, data, { full }) {
+function fleetEmbed(domain, data) {
   const rows = Array.isArray(data.results) ? data.results : [];
   const okRows = rows.filter((r) => r.ok);
   const clears = okRows.filter((r) => !r.blocked);
@@ -583,9 +582,8 @@ function fleetEmbed(domain, data, { full }) {
   if (clears.length) parts.push("", "**✅ Clears**", ...clears.map(line));
   if (errored.length) parts.push("", "**⚠️ Couldn't check**", ...errored.map(line));
 
-  const foot = full
-    ? "Full fleet · Tier-3 (iBoss/LanSchool/Aristotle) read one district and can drift"
-    : "Tier-1 vendor checks · add full:true for the whole fleet";
+  const foot =
+    "Full fleet · Tier-3 (iBoss/LanSchool/Aristotle) read one district and can drift";
 
   return new EmbedBuilder()
     .setColor(color)
@@ -619,11 +617,10 @@ async function handleCheck(i) {
   const rate = checkRate(i.user.id);
   if (!rate.ok) return i.reply({ content: rate.msg, flags: MessageFlags.Ephemeral });
 
-  const full = i.options.getBoolean("full") || false;
   checkRecord(i.user.id);
   await i.deferReply(); // public — seeing each other's checks keeps the channel active
 
-  const res = await fleetCheck(domain, { full });
+  const res = await fleetCheck(domain);
   if (!res.ok) {
     const msg =
       res.error === "quota"
@@ -635,7 +632,7 @@ async function handleCheck(i) {
         : `⚠️ Couldn't check that right now (${res.error}).`;
     return i.editReply(msg);
   }
-  await i.editReply({ embeds: [fleetEmbed(domain, res.data, { full })] });
+  await i.editReply({ embeds: [fleetEmbed(domain, res.data)] });
 }
 
 function buildCheckModal() {
@@ -839,9 +836,6 @@ const commands = [
     .setDescription("Check which school filters block or clear a link")
     .addStringOption((o) =>
       o.setName("url").setDescription("A domain or link, e.g. cool-game.io").setRequired(true)
-    )
-    .addBooleanOption((o) =>
-      o.setName("full").setDescription("Run the whole fleet (slower, adds single-district checks)").setRequired(false)
     ),
   new SlashCommandBuilder()
     .setName("byod")
