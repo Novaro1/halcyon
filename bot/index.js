@@ -540,6 +540,12 @@ async function fleetCheck(domain, { full = false } = {}) {
 }
 
 // Turn a fleet response into an embed: clears / blocked / couldn't-check, grouped.
+// Keep category labels short enough to stay on one line in the embed.
+function shorten(s, n = 46) {
+  s = String(s || "").trim();
+  return s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s;
+}
+
 function fleetEmbed(domain, data, { full }) {
   const rows = Array.isArray(data.results) ? data.results : [];
   const okRows = rows.filter((r) => r.ok);
@@ -547,32 +553,44 @@ function fleetEmbed(domain, data, { full }) {
   const blocked = okRows.filter((r) => r.blocked);
   const errored = rows.filter((r) => !r.ok);
   const anyCached = rows.some((r) => r.cached);
+  const n = okRows.length;
 
   const color =
-    okRows.length === 0 ? BRAND : blocked.length === 0 ? 0x57f287 : clears.length === 0 ? 0xed4245 : 0xfee75c;
+    n === 0 ? BRAND : blocked.length === 0 ? 0x57f287 : clears.length === 0 ? 0xed4245 : 0xfee75c;
 
-  const head =
-    okRows.length === 0
-      ? "Couldn't get a verdict from any checker right now."
+  // Headline verdict.
+  const header =
+    n === 0
+      ? "### ⚠️ No verdict available"
       : blocked.length === 0
-      ? `🟢 **Clears every checker** (${clears.length}/${okRows.length}) — a strong pick.`
+      ? `### 🟢 Clears all ${n} filters`
       : clears.length === 0
-      ? `🔴 **Blocked everywhere** (${blocked.length}/${okRows.length}).`
-      : `🟡 **Clears ${clears.length}/${okRows.length}** — works on some filters, not others.`;
+      ? `### 🔴 Blocked on all ${n} filters`
+      : `### 🟡 Clears ${clears.length} of ${n} filters`;
 
-  const lines = [head, ""];
-  if (clears.length) lines.push(`✅ **Clears:** ${clears.map((r) => fleetName(r.checker)).join(", ")}`);
-  if (blocked.length) lines.push(`🚫 **Blocked by:** ${blocked.map((r) => fleetName(r.checker)).join(", ")}`);
-  if (errored.length) lines.push(`⚠️ **Couldn't check:** ${errored.map((r) => fleetName(r.checker)).join(", ")}`);
+  // At-a-glance ratio bar: one square per checker, in the fleet's order.
+  const square = (r) => (!r.ok ? "🟨" : r.blocked ? "🟥" : "🟩");
+  const bar = rows.map(square).join("");
+
+  // Per-checker line: status dot · bold name · category chip.
+  const dot = (r) => (!r.ok ? "🟡" : r.blocked ? "🔴" : "🟢");
+  const label = (r) =>
+    r.ok ? shorten(r.category || "—") : shorten(r.error || "couldn't reach checker");
+  const line = (r) => `${dot(r)} **${fleetName(r.checker)}**  \`${label(r)}\``;
+
+  const parts = [header, `\`${domain}\`  ${bar}`];
+  if (blocked.length) parts.push("", "**🚫 Blocked**", ...blocked.map(line));
+  if (clears.length) parts.push("", "**✅ Clears**", ...clears.map(line));
+  if (errored.length) parts.push("", "**⚠️ Couldn't check**", ...errored.map(line));
 
   const foot = full
     ? "Full fleet · Tier-3 (iBoss/LanSchool/Aristotle) read one district and can drift"
-    : "Tier-1 vendor checks · run again with full:true for the whole fleet";
+    : "Tier-1 vendor checks · add full:true for the whole fleet";
 
   return new EmbedBuilder()
     .setColor(color)
-    .setTitle(`🔎 Filter check — ${domain}`)
-    .setDescription(lines.join("\n"))
+    .setAuthor({ name: "Filter check" })
+    .setDescription(parts.join("\n"))
     .setFooter({ text: foot + (anyCached ? " · 🔁 cached" : "") });
 }
 
