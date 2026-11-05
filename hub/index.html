@@ -3,9 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="robots" content="noindex" />
-    <title>Halcyon — Links</title>
-    <meta name="description" content="Members-only working links for Halcyon." />
+    <title>Halcyon — the web unblocker that keeps working</title>
+    <meta
+      name="description"
+      content="Halcyon is a free web unblocker for school. A dozen mirror links across different hosts, so when one gets blocked you just grab another. A Discord bot tells you which links beat your school's filter (Securly, GoGuardian, Lightspeed and more). Join for the always-current list."
+    />
+    <meta name="keywords" content="web unblocker, unblocked proxy, school proxy, web proxy for school, unblocked games, bypass school filter, scramjet proxy, securly bypass, goguardian bypass, lightspeed bypass" />
+    <link rel="canonical" href="https://novaro1.github.io/halcyon/" />
+    <meta name="theme-color" content="#1fd1a3" />
+    <!-- social embed -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Halcyon — the web unblocker that keeps working" />
+    <meta property="og:description" content="A dozen rotating mirror links, a bot that tells you which ones beat YOUR school's filter, and bring-your-own-domain support. Join the Discord for the always-current list." />
+    <meta property="og:url" content="https://novaro1.github.io/halcyon/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Halcyon — the web unblocker that keeps working" />
+    <meta name="twitter:description" content="A dozen rotating mirror links, a bot that tells you which ones beat YOUR school's filter, and BYOD support. Join the Discord." />
     <link
       href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,900;1,9..144,500&family=Hanken+Grotesk:wght@400;500;600;700&display=swap"
       rel="stylesheet"
@@ -16,6 +29,7 @@
         --teal: #1fd1a3;
         --gold: #ffd27a;
         --copper: #ff8a4c;
+        --blurple: #5865f2;
         --bg: #040b09;
         --text: #f4eee1;
         --muted: #9ba79a;
@@ -29,20 +43,23 @@
         --display: "Fraunces", Georgia, serif;
       }
       * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
       body {
         margin: 0; min-height: 100vh;
-        font-family: var(--font); color: var(--text);
+        font-family: var(--font); color: var(--text); line-height: 1.5;
         background:
           radial-gradient(1100px 620px at 18% -5%, rgba(31, 209, 163, 0.16), transparent 60%),
           radial-gradient(900px 520px at 105% 12%, rgba(255, 138, 76, 0.12), transparent 55%),
           var(--bg);
         display: flex; flex-direction: column; align-items: center;
-        padding: 10vh 20px 64px;
+        padding: 0 20px 72px;
       }
-      .wrap { width: 100%; max-width: 560px; }
-      header { text-align: center; margin-bottom: 30px; }
+      .wrap { width: 100%; max-width: 860px; }
+
+      /* ---- hero ---- */
+      header { text-align: center; padding: 11vh 0 8px; }
       .orb {
-        width: 60px; height: 60px; border-radius: 50%; margin: 0 auto 18px;
+        width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 20px;
         position: relative; background: var(--grad);
         animation: orbGlow 5s ease-in-out infinite alternate;
       }
@@ -54,39 +71,80 @@
         from { box-shadow: 0 0 14px rgba(31, 209, 163, 0.4), 0 0 24px rgba(255, 138, 76, 0.18), inset 0 0 12px rgba(255, 255, 255, 0.3); }
         to   { box-shadow: 0 0 24px rgba(31, 209, 163, 0.68), 0 0 44px rgba(255, 138, 76, 0.4), inset 0 0 12px rgba(255, 255, 255, 0.4); }
       }
-      @media (prefers-reduced-motion: reduce) { .orb { animation: none; } }
       h1 {
-        font-family: var(--display); font-weight: 900; font-size: 54px;
-        letter-spacing: -1px; margin: 0;
+        font-family: var(--display); font-weight: 900; font-size: clamp(52px, 11vw, 92px);
+        letter-spacing: -2px; margin: 0; line-height: 0.95;
         background: var(--grad); -webkit-background-clip: text; background-clip: text;
         -webkit-text-fill-color: transparent;
       }
-      .tagline { color: var(--muted); font-size: 15px; margin: 8px 0 0; }
-      .gatecard {
-        text-align: center; background: var(--glass);
-        border: 1px solid var(--stroke-soft); border-radius: 18px; padding: 30px 24px;
+      .tagline {
+        font-family: var(--display); font-style: italic; font-weight: 500;
+        color: var(--text); font-size: clamp(19px, 3.4vw, 26px); margin: 16px auto 0; max-width: 20ch;
       }
-      .lead { color: var(--muted); font-size: 15px; line-height: 1.55; margin: 0 0 22px; }
-      .lead strong { color: var(--text); }
-      .getlinks {
+      .sub { color: var(--muted); font-size: 16px; max-width: 46ch; margin: 14px auto 0; }
+
+      /* ---- CTAs ---- */
+      .cta-row {
+        display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; margin: 30px 0 6px;
+      }
+      .btn {
         display: inline-flex; align-items: center; justify-content: center; gap: 10px;
-        padding: 16px 28px; border-radius: 14px; background: var(--grad);
-        color: #04120e; font-weight: 800; font-size: 16px; text-decoration: none;
-        box-shadow: 0 10px 30px rgba(31, 209, 163, 0.25); transition: transform 0.18s;
+        padding: 15px 26px; border-radius: 14px; font-weight: 800; font-size: 16px;
+        text-decoration: none; border: 1px solid transparent; transition: transform 0.16s, background 0.18s;
       }
-      .getlinks:hover { transform: translateY(-2px); }
-      .discord {
-        display: flex; align-items: center; justify-content: center; gap: 10px;
-        margin-top: 16px; padding: 15px; border-radius: 16px;
-        background: rgba(88, 101, 242, 0.16); border: 1px solid rgba(88, 101, 242, 0.4);
-        color: #c7ceff; text-decoration: none; font-weight: 700; font-size: 15px;
-        transition: background 0.18s;
+      .btn:hover { transform: translateY(-2px); }
+      .btn-discord { background: var(--blurple); color: #fff; box-shadow: 0 12px 30px rgba(88, 101, 242, 0.34); }
+      .btn-discord:hover { background: #4954e6; }
+      .btn-try {
+        background: var(--glass-strong); color: var(--text); border-color: var(--stroke);
       }
-      .discord:hover { background: rgba(88, 101, 242, 0.26); }
-      .discord[hidden], .getlinks[hidden] { display: none; }
-      footer { text-align: center; color: var(--faint); font-size: 12px; margin-top: 34px; line-height: 1.6; }
+      .btn-try:hover { background: rgba(255, 250, 240, 0.12); }
+      .btn[hidden] { display: none; }
+      .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); flex: none; }
+      .dot.up { background: var(--teal); box-shadow: 0 0 8px rgba(31, 209, 163, 0.7); }
+      .dot.down { background: #ff6b5e; box-shadow: 0 0 8px rgba(255, 107, 94, 0.6); }
+      .member-link { display: block; text-align: center; margin-top: 16px; font-size: 14px; }
+      .member-link a { color: var(--muted); text-decoration: none; border-bottom: 1px dashed var(--stroke); }
+      .member-link a:hover { color: var(--text); }
+      .demo-note { text-align: center; color: var(--faint); font-size: 13px; margin-top: 12px; min-height: 18px; }
+
+      /* ---- features ---- */
+      .features {
+        display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 56px;
+      }
+      .card {
+        background: var(--glass); border: 1px solid var(--stroke-soft); border-radius: 18px;
+        padding: 24px 22px;
+      }
+      .card .ico { font-size: 24px; line-height: 1; }
+      .card h3 { font-family: var(--display); font-weight: 600; font-size: 20px; margin: 14px 0 7px; }
+      .card p { color: var(--muted); font-size: 14.5px; margin: 0; }
+      .card strong { color: var(--text); font-weight: 600; }
+
+      /* ---- how it works ---- */
+      .how { margin-top: 56px; text-align: center; }
+      .how h2 { font-family: var(--display); font-weight: 600; font-size: 26px; margin: 0 0 26px; }
+      .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+      .step { background: var(--glass); border: 1px solid var(--stroke-soft); border-radius: 16px; padding: 20px 14px; }
+      .step .n {
+        width: 30px; height: 30px; border-radius: 50%; margin: 0 auto 12px;
+        display: grid; place-items: center; font-weight: 800; font-size: 15px; color: #04120e;
+        background: var(--grad);
+      }
+      .step p { margin: 0; font-size: 14px; color: var(--muted); }
+      .step strong { color: var(--text); display: block; font-weight: 600; margin-bottom: 3px; }
+
+      .closing { text-align: center; margin-top: 56px; }
+      .closing .btn-discord { font-size: 17px; padding: 17px 32px; }
+
+      footer { text-align: center; color: var(--faint); font-size: 12.5px; margin-top: 48px; line-height: 1.7; }
       footer a { color: var(--muted); }
-      @media (max-width: 520px) { h1 { font-size: 44px; } }
+
+      @media (max-width: 680px) {
+        .features { grid-template-columns: 1fr; }
+        .steps { grid-template-columns: repeat(2, 1fr); }
+      }
+      @media (prefers-reduced-motion: reduce) { .orb { animation: none; } html { scroll-behavior: auto; } }
     </style>
   </head>
   <body>
@@ -94,24 +152,71 @@
       <header>
         <div class="orb"></div>
         <h1>Halcyon</h1>
-        <p class="tagline">A calm window on the open web.</p>
+        <p class="tagline">The web unblocker that keeps working.</p>
+        <p class="sub">
+          One link blocked at school? Grab another. Halcyon runs a dozen mirror
+          domains across different hosts, so there's always one your filter hasn't
+          caught yet.
+        </p>
+
+        <div class="cta-row">
+          <a class="btn btn-discord" id="discord" href="#" hidden>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20 4a19 19 0 0 0-4.9-1.5l-.3.5A17 17 0 0 1 18 4.6 17.6 17.6 0 0 0 6 4.6 17 17 0 0 1 9.2 3l-.3-.5A19 19 0 0 0 4 4C1.6 7.7 1 11.3 1.2 14.8A19 19 0 0 0 7 17.8l.4-.6a12 12 0 0 1-1.9-.9l.5-.4a13.6 13.6 0 0 0 11.8 0l.5.4a12 12 0 0 1-1.9.9l.4.6a19 19 0 0 0 5.8-3C23.1 10.7 22.1 7.1 20 4ZM8.4 13.3c-.9 0-1.7-.9-1.7-1.9s.8-1.9 1.7-1.9 1.7.9 1.7 1.9-.8 1.9-1.7 1.9Zm7.2 0c-.9 0-1.7-.9-1.7-1.9s.8-1.9 1.7-1.9 1.7.9 1.7 1.9-.8 1.9-1.7 1.9Z"/></svg>
+            Join the Discord for links
+          </a>
+          <a class="btn btn-try" id="try" href="#" target="_blank" rel="noopener" hidden>
+            <span class="dot" id="demodot"></span> Try it now
+          </a>
+        </div>
+        <p class="demo-note" id="demonote"></p>
+        <span class="member-link">
+          <a id="memberlink" href="#" hidden>Already a member? Reveal your links &rarr;</a>
+        </span>
       </header>
 
-      <main class="gatecard">
-        <p class="lead">
-          The working links are <strong>members only</strong>. Log in with Discord to
-          confirm you're a verified member of the server, and your links appear instantly.
-        </p>
-        <a class="getlinks" id="getlinks" href="#" hidden>Log in with Discord to get links</a>
-        <a class="discord" id="discord" href="#" hidden>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4a19 19 0 0 0-4.9-1.5l-.3.5A17 17 0 0 1 18 4.6 17.6 17.6 0 0 0 6 4.6 17 17 0 0 1 9.2 3l-.3-.5A19 19 0 0 0 4 4C1.6 7.7 1 11.3 1.2 14.8A19 19 0 0 0 7 17.8l.4-.6a12 12 0 0 1-1.9-.9l.5-.4a13.6 13.6 0 0 0 11.8 0l.5.4a12 12 0 0 1-1.9.9l.4.6a19 19 0 0 0 5.8-3C23.1 10.7 22.1 7.1 20 4ZM8.4 13.3c-.9 0-1.7-.9-1.7-1.9s.8-1.9 1.7-1.9 1.7.9 1.7 1.9-.8 1.9-1.7 1.9Zm7.2 0c-.9 0-1.7-.9-1.7-1.9s.8-1.9 1.7-1.9 1.7.9 1.7 1.9-.8 1.9-1.7 1.9Z"/></svg>
-          Join the Discord
+      <section class="features" aria-label="Why Halcyon">
+        <div class="card">
+          <div class="ico">🔗</div>
+          <h3>A dozen rotating links</h3>
+          <p>Mirror domains on <strong>many different hosts</strong>. When one gets blocked, the others keep working, and fresh ones drop regularly.</p>
+        </div>
+        <div class="card">
+          <div class="ico">🔎</div>
+          <h3>Know what beats your filter</h3>
+          <p>Our <strong>/check bot</strong> tests any link against 13 real school filters live, Securly, GoGuardian, Lightspeed, FortiGuard and more, so you pick the one that works at <strong>your</strong> school.</p>
+        </div>
+        <div class="card">
+          <div class="ico">🌐</div>
+          <h3>Bring your own domain</h3>
+          <p>Point a domain you own at Halcyon and it becomes <strong>your private mirror</strong> that nobody else is sharing, so it stays unblocked longer.</p>
+        </div>
+        <div class="card">
+          <div class="ico">🛡️</div>
+          <h3>Fast, clean, private</h3>
+          <p>Ad and tracker blocking built in, encrypted transport, and no sketchy redirects. Just a <strong>calm window on the open web</strong>.</p>
+        </div>
+      </section>
+
+      <section class="how">
+        <h2>How it works</h2>
+        <div class="steps">
+          <div class="step"><div class="n">1</div><p><strong>Join</strong>the Discord</p></div>
+          <div class="step"><div class="n">2</div><p><strong>Verify</strong>one quick tap</p></div>
+          <div class="step"><div class="n">3</div><p><strong>Run /check</strong>find a link that beats your filter</p></div>
+          <div class="step"><div class="n">4</div><p><strong>Browse</strong>open it and go</p></div>
+        </div>
+      </section>
+
+      <section class="closing">
+        <a class="btn btn-discord" id="discord2" href="#" hidden>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20 4a19 19 0 0 0-4.9-1.5l-.3.5A17 17 0 0 1 18 4.6 17.6 17.6 0 0 0 6 4.6 17 17 0 0 1 9.2 3l-.3-.5A19 19 0 0 0 4 4C1.6 7.7 1 11.3 1.2 14.8A19 19 0 0 0 7 17.8l.4-.6a12 12 0 0 1-1.9-.9l.5-.4a13.6 13.6 0 0 0 11.8 0l.5.4a12 12 0 0 1-1.9.9l.4.6a19 19 0 0 0 5.8-3C23.1 10.7 22.1 7.1 20 4ZM8.4 13.3c-.9 0-1.7-.9-1.7-1.9s.8-1.9 1.7-1.9 1.7.9 1.7 1.9-.8 1.9-1.7 1.9Zm7.2 0c-.9 0-1.7-.9-1.7-1.9s.8-1.9 1.7-1.9 1.7.9 1.7 1.9-.8 1.9-1.7 1.9Z"/></svg>
+          Join the Discord &rarr;
         </a>
-      </main>
+      </section>
 
       <footer>
-        Not in the server yet? Join the Discord, verify, then log in here. <br />
-        Open source · <a href="https://github.com/Novaro1/halcyon">github.com/Novaro1/halcyon</a>
+        Free and open source · <a href="https://github.com/Novaro1/halcyon">github.com/Novaro1/halcyon</a><br />
+        Made for getting unstuck, not for anything you shouldn't be doing.
       </footer>
     </div>
 
@@ -120,16 +225,35 @@
       fetch("links.json", { cache: "no-store" })
         .then((r) => r.json())
         .then((data) => {
-          // The gate Worker URL — members log in there to reveal the links.
-          if (data.gate && !data.gate.includes("__GATE_URL__")) {
-            const g = $("#getlinks");
-            g.href = data.gate;
-            g.hidden = false;
-          }
           if (data.discord) {
-            const d = $("#discord");
-            d.href = data.discord;
-            d.hidden = false;
+            for (const id of ["#discord", "#discord2"]) {
+              const el = $(id);
+              if (el) { el.href = data.discord; el.hidden = false; }
+            }
+          }
+          if (data.gate && !String(data.gate).includes("__GATE_URL__")) {
+            const m = $("#memberlink");
+            m.href = data.gate; m.hidden = false;
+          }
+          // Optional public "try it" demo link + live reachability check.
+          const demo = data.demo && data.demo.url;
+          if (demo) {
+            const t = $("#try");
+            t.href = demo; t.hidden = false;
+            const dot = $("#demodot"), note = $("#demonote");
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 7000);
+            fetch(demo, { mode: "no-cors", signal: ctrl.signal })
+              .then(() => {
+                clearTimeout(timer);
+                dot.classList.add("up");
+                note.textContent = "Demo looks reachable from your network. Join for the full list.";
+              })
+              .catch(() => {
+                clearTimeout(timer);
+                dot.classList.add("down");
+                note.textContent = "Demo looks blocked here, join the Discord for a dozen more that aren't.";
+              });
           }
         })
         .catch(() => {});

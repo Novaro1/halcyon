@@ -1,6 +1,10 @@
 {
   "discord": "https://discord.gg/n6AJJASUkd",
   "gate": "https://halcyon-gate.clarity-hq.workers.dev",
-  "note": "Links are members-only — log in with Discord to reveal them.",
+  "note": "Join the Discord for the full, always-current list of working links.",
+  "demo": {
+    "name": "Cloudflare Pages mirror",
+    "url": "https://studybuddy-4qr.pages.dev/"
+  },
   "mirrors": []
 }
