@@ -145,9 +145,74 @@
         .steps { grid-template-columns: repeat(2, 1fr); }
       }
       @media (prefers-reduced-motion: reduce) { .orb { animation: none; } html { scroll-behavior: auto; } }
+
+      /* ---- educational decoy splash (shows briefly on load, then reveals the real page) ---- */
+      #decoy {
+        position: fixed; inset: 0; z-index: 2147483000;
+        background: #f4f6fb; color: #1f2937;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+        display: flex; flex-direction: column;
+        animation: dkHide 4s ease forwards;
+      }
+      #decoy.skip {
+        opacity: 0 !important; visibility: hidden; pointer-events: none;
+        animation: none; transition: opacity .3s ease, visibility .3s;
+      }
+      @keyframes dkHide {
+        0%, 86% { opacity: 1; visibility: visible; }
+        100% { opacity: 0; visibility: hidden; pointer-events: none; }
+      }
+      .dk-top {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 14px 22px; background: #fff; border-bottom: 1px solid #e5e7eb;
+        box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+      }
+      .dk-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; color: #1e3a8a; }
+      .dk-logo {
+        width: 32px; height: 32px; border-radius: 8px; background: #2563eb; color: #fff;
+        display: inline-flex; align-items: center; justify-content: center; font-size: 17px;
+      }
+      .dk-acct { font-size: 13px; color: #6b7280; }
+      .dk-body { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; gap: 16px; }
+      .dk-spinner {
+        width: 44px; height: 44px; border-radius: 50%;
+        border: 4px solid #dbe4f3; border-top-color: #2563eb;
+        animation: dkSpin 0.8s linear infinite;
+      }
+      @keyframes dkSpin { to { transform: rotate(360deg); } }
+      .dk-msg { margin: 0; color: #4b5563; font-size: 15px; }
+      .dk-cards { display: grid; gap: 10px; width: 100%; max-width: 340px; margin-top: 6px; }
+      .dk-card {
+        display: flex; align-items: center; gap: 12px; background: #fff;
+        border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px;
+      }
+      .dk-ico {
+        width: 34px; height: 34px; border-radius: 8px; flex: none;
+        display: inline-flex; align-items: center; justify-content: center; font-size: 18px; color: #fff;
+      }
+      .dk-m { background: #2563eb; } .dk-e { background: #059669; } .dk-s { background: #d97706; }
+      .dk-card b { display: block; font-size: 14px; color: #111827; }
+      .dk-card small { color: #9ca3af; font-size: 12px; }
+      @media (prefers-reduced-motion: reduce) { .dk-spinner { animation: none; } }
     </style>
   </head>
   <body>
+    <div id="decoy" role="presentation" aria-hidden="true">
+      <div class="dk-top">
+        <div class="dk-brand"><span class="dk-logo">🎓</span><span>Student Learning Portal</span></div>
+        <div class="dk-acct">Signing in&hellip;</div>
+      </div>
+      <div class="dk-body">
+        <div class="dk-spinner"></div>
+        <p class="dk-msg">Loading your dashboard&hellip;</p>
+        <div class="dk-cards">
+          <div class="dk-card"><span class="dk-ico dk-m">&sum;</span><div><b>Mathematics</b><small>2 assignments due</small></div></div>
+          <div class="dk-card"><span class="dk-ico dk-e">&#9998;</span><div><b>English</b><small>Reading response due Friday</small></div></div>
+          <div class="dk-card"><span class="dk-ico dk-s">&#9879;</span><div><b>Science</b><small>Lab report in progress</small></div></div>
+        </div>
+      </div>
+    </div>
+
     <div class="wrap">
       <header>
         <div class="orb"></div>
@@ -222,6 +287,30 @@
 
     <script>
       const $ = (s) => document.querySelector(s);
+
+      // Educational decoy: cloak the tab title while the splash shows, then
+      // reveal the real page. Auto-hides via CSS even with JS off; here we add
+      // instant skip-on-interaction and restore the real title/favicon.
+      (function () {
+        const decoy = document.getElementById("decoy");
+        if (!decoy) return;
+        const realTitle = document.title;
+        document.title = "Student Learning Portal";
+        let done = false;
+        const reveal = () => {
+          if (done) return;
+          done = true;
+          decoy.classList.add("skip");
+          document.title = realTitle;
+          setTimeout(() => decoy.remove(), 400);
+        };
+        ["pointerdown", "keydown", "touchstart"].forEach((ev) =>
+          document.addEventListener(ev, reveal, { once: true, passive: true })
+        );
+        decoy.addEventListener("animationend", reveal);
+        setTimeout(reveal, 4300); // safety net if animationend doesn't fire
+      })();
+
       fetch("links.json", { cache: "no-store" })
         .then((r) => r.json())
         .then((data) => {
