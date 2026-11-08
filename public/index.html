@@ -6,6 +6,11 @@
     <meta name="robots" content="noindex" />
     <title>Halcyon</title>
     <link rel="icon" href="/assets/icon.svg" />
+    <!-- Reachability beacon (see front/index.html): tells a framing prober such as
+         studybuddy.website that this is genuinely Halcyon, not a block page. -->
+    <script>
+      try { if (window.parent && window.parent !== window) window.parent.postMessage("halcyon-ok", "*"); } catch (e) {}
+    </script>
     <link
       rel="preconnect"
       href="https://fonts.gstatic.com"

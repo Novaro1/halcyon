@@ -512,7 +512,12 @@ async function getRemoveparams() {
 function baseHeaders(res) {
   res.setHeader("Referrer-Policy", "no-referrer");
   res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  // Allow our own origin and the studybuddy.website reachability prober to frame
+  // the shell — the prober loads it hidden and reads the postMessage beacon below
+  // to confirm a link is really Halcyon (not a filter block page). frame-ancestors
+  // is the ONLY CSP directive, so it doesn't touch Scramjet's eval/wasm/blob needs.
+  // (Replaces X-Frame-Options: SAMEORIGIN, which can't allow a specific cross-origin.)
+  res.setHeader("Content-Security-Policy", "frame-ancestors 'self' https://studybuddy.website");
   // Everything we serve here is public, non-credentialed static content (shell,
   // runtime, live lists). Allow cross-origin reads so front links on other hosts
   // can pull the runtime + lists from this origin. The tunnel stays gated.

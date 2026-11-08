@@ -9,6 +9,12 @@
       window.HALCYON_BACKEND = "__HALCYON_BACKEND__"; // tunnel + PoW origin
       window.HALCYON_BASE = "__HALCYON_BASE__"; // "" at an origin root, "/<bucket>" on a sub-path host
     </script>
+    <!-- Reachability beacon: if this real Halcyon shell is loaded inside a frame
+         (e.g. studybuddy.website's "open a working link" prober), announce it so the
+         prober knows this is genuinely Halcyon and not a filter's block page. -->
+    <script>
+      try { if (window.parent && window.parent !== window) window.parent.postMessage("halcyon-ok", "*"); } catch (e) {}
+    </script>
     <style>
       #halcyon-gate{position:fixed;inset:0;z-index:99999;display:grid;place-items:center;
         font-family:"Hanken Grotesk",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#f4eee1;
