@@ -11,6 +11,8 @@
     <meta name="keywords" content="web unblocker, unblocked proxy, school proxy, web proxy for school, unblocked games, bypass school filter, scramjet proxy, securly bypass, goguardian bypass, lightspeed bypass" />
     <link rel="canonical" href="https://halcyoncentral.com/" />
     <meta name="theme-color" content="#1fd1a3" />
+    <link rel="icon" id="favicon" href="icon.svg" />
+    <link rel="apple-touch-icon" href="icon.svg" />
     <!-- social embed -->
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Halcyon — the web unblocker that keeps working" />
@@ -295,13 +297,18 @@
         const decoy = document.getElementById("decoy");
         if (!decoy) return;
         const realTitle = document.title;
+        const favicon = document.getElementById("favicon");
+        const realIcon = favicon && favicon.getAttribute("href");
         document.title = "Student Learning Portal";
+        // Match the decoy: a generic book icon while the splash shows.
+        if (favicon) favicon.setAttribute("href", "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%F0%9F%93%96%3C/text%3E%3C/svg%3E");
         let done = false;
         const reveal = () => {
           if (done) return;
           done = true;
           decoy.classList.add("skip");
           document.title = realTitle;
+          if (favicon && realIcon) favicon.setAttribute("href", realIcon);
           setTimeout(() => decoy.remove(), 400);
         };
         ["pointerdown", "keydown", "touchstart"].forEach((ev) =>
