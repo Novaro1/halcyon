@@ -6,5 +6,16 @@
     "name": "Cloudflare Pages mirror",
     "url": "https://studybuddy-4qr.pages.dev/"
   },
-  "mirrors": []
+  "mirrors": [
+    {
+      "name": "Cloud Run mirror",
+      "url": "https://studyroom-611677482392.us-central1.run.app",
+      "host": "studyroom-611677482392.us-central1.run.app"
+    },
+    {
+      "name": "Firebase mirror",
+      "url": "https://studybuddy-726c0.web.app",
+      "host": "studybuddy-726c0.web.app"
+    }
+  ]
 }
