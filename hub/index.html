@@ -22,7 +22,7 @@
     <meta name="twitter:title" content="Halcyon — the web unblocker that keeps working" />
     <meta name="twitter:description" content="A dozen rotating mirror links, a bot that tells you which ones beat YOUR school's filter, and BYOD support. Join the Discord." />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,900;1,9..144,500&family=Hanken+Grotesk:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,700;0,9..144,900;1,9..144,500&family=Hanken+Grotesk:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <style>
@@ -33,6 +33,7 @@
         --copper: #ff8a4c;
         --blurple: #5865f2;
         --bg: #071310;
+        --surface-raised: #0e1512;
         --text: #f4eee1;
         --muted: #9ba79a;
         --faint: #66756b;
@@ -112,19 +113,19 @@
         display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 56px;
       }
       .card {
-        background: var(--glass); border: 1px solid var(--stroke-soft); border-radius: 18px;
+        background: var(--surface-raised); border: 1px solid var(--stroke-soft); border-radius: 18px;
         padding: 24px 22px;
       }
       .card .ico { font-size: 24px; line-height: 1; }
-      .card h3 { font-family: var(--display); font-weight: 600; font-size: 20px; margin: 14px 0 7px; }
+      .card h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 14px 0 7px; }
       .card p { color: var(--muted); font-size: 14.5px; margin: 0; }
       .card strong { color: var(--text); font-weight: 600; }
 
       /* ---- how it works ---- */
       .how { margin-top: 56px; text-align: center; }
-      .how h2 { font-family: var(--display); font-weight: 600; font-size: 26px; margin: 0 0 26px; }
+      .how h2 { font-family: var(--display); font-weight: 700; font-size: 26px; margin: 0 0 26px; }
       .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-      .step { background: var(--glass); border: 1px solid var(--stroke-soft); border-radius: 16px; padding: 20px 14px; }
+      .step { background: var(--surface-raised); border: 1px solid var(--stroke-soft); border-radius: 16px; padding: 20px 14px; }
       .step .n {
         width: 30px; height: 30px; border-radius: 50%; margin: 0 auto 12px;
         display: grid; place-items: center; font-weight: 800; font-size: 15px; color: #04120e;
