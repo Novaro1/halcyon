@@ -8,6 +8,11 @@
   },
   "mirrors": [
     {
+      "name": "Google Storage mirror",
+      "url": "https://storage.googleapis.com/studybuddy-static/index.html",
+      "host": "storage.googleapis.com"
+    },
+    {
       "name": "Cloud Run mirror",
       "url": "https://studyroom-947011626629.us-central1.run.app",
       "host": "studyroom-947011626629.us-central1.run.app"
