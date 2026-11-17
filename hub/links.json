@@ -9,8 +9,8 @@
   "mirrors": [
     {
       "name": "Cloud Run mirror",
-      "url": "https://studyroom-611677482392.us-central1.run.app",
-      "host": "studyroom-611677482392.us-central1.run.app"
+      "url": "https://studyroom-947011626629.us-central1.run.app",
+      "host": "studyroom-947011626629.us-central1.run.app"
     },
     {
       "name": "Firebase mirror",
