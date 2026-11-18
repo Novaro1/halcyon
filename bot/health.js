@@ -10,11 +10,16 @@
 // "degraded" (server answered, but it isn't serving Halcyon) or "down"
 // (couldn't reach it at all).
 
-// `<title>Halcyon</title>` is present on every real Halcyon response (gate page,
-// login, or app) and absent from 502s / parked / filter-block pages — specific
-// enough on its own. (Gate style has changed over time — passphrase → Turnstile →
-// PoW — so we match the stable title, not a form field that comes and goes.)
-const HALCYON_SIGNATURE = [/<title>\s*Halcyon\s*<\/title>/i];
+// A healthy front is identified by EITHER marker, present in the served source
+// and absent from 502s / parked / filter-block pages:
+//   - `halcyon-ok`  — the protected beacon string kept through every cloak pass;
+//     present on ALL cloaked fronts incl. SVG-only entries (e.g. the jsDelivr
+//     notes.svg mirror, which has no <title> at all).
+//   - `<title>Halcyon</title>` — still in the served HTML source (the homoglyph
+//     cloak rewrites the title at RUNTIME in the browser, so a server-side fetch
+//     sees the original); covers an un-cloaked front like the raw backend.
+// Match ANY one (`.some`), so every mirror type health-checks correctly.
+const HALCYON_SIGNATURE = [/halcyon-ok/i, /<title>\s*Halcyon\s*<\/title>/i];
 
 export const UP = "up";
 export const DEGRADED = "degraded";
@@ -42,7 +47,7 @@ export function decide(sample) {
     return { state: DOWN, reason: sample.error };
   }
   const { status, body = "" } = sample;
-  if (status === 200 && HALCYON_SIGNATURE.every((rx) => rx.test(body))) {
+  if (status === 200 && HALCYON_SIGNATURE.some((rx) => rx.test(body))) {
     return { state: UP, reason: "ok" };
   }
   if (status >= 500) {

@@ -21,6 +21,15 @@ import { probe, StatusMonitor, formatAlert, UP } from "../bot/health.js";
 const WEBHOOK = process.env.HALCYON_ALERT_WEBHOOK || "";
 const BACKEND = (process.env.HALCYON_BACKEND || "").replace(/\/+$/, "");
 const LINKS_URL = process.env.LINKS_URL || "https://novaro1.github.io/halcyon/links.json";
+// Prefer the gate KV — the REAL distributed set the bot /addlink writes and the
+// member portal reads — over the static hub links.json teaser (which lags the KV).
+// Set GATE_URL + BOT_LINKS_SECRET to monitor exactly what users actually get.
+const GATE_URL = (process.env.GATE_URL || "").replace(/\/+$/, "");
+const BOT_LINKS_SECRET = process.env.BOT_LINKS_SECRET || "";
+const LINKS_SOURCE =
+  GATE_URL && BOT_LINKS_SECRET
+    ? `${GATE_URL}/bot/links?key=${encodeURIComponent(BOT_LINKS_SECRET)}`
+    : LINKS_URL;
 const INTERVAL_MS = Math.max(1, Number(process.env.MONITOR_INTERVAL_MIN || 5)) * 60_000;
 const CONFIRM = Math.max(1, Number(process.env.MONITOR_CONFIRM || 2));
 const ROLE_ID = process.env.STATUS_ALERT_ROLE_ID || "";
@@ -42,7 +51,7 @@ const hostLabel = (u) => {
 
 async function fetchMirrors() {
   try {
-    const r = await fetch(LINKS_URL, { cache: "no-store" });
+    const r = await fetch(LINKS_SOURCE, { cache: "no-store" });
     if (!r.ok) return [];
     const d = await r.json();
     return Array.isArray(d.mirrors) ? d.mirrors.map((m) => m.url).filter(Boolean) : [];
@@ -88,6 +97,7 @@ async function cycle() {
 
 console.log(
   `Halcyon monitor up — every ${INTERVAL_MS / 60000}m, confirm=${CONFIRM}` +
+    `, source=${GATE_URL && BOT_LINKS_SECRET ? "gate KV" : "links.json"}` +
     (BACKEND ? `, backend ${BACKEND}` : "") +
     (ROLE_ID ? ", role-ping on" : "")
 );
