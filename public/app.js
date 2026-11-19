@@ -81,6 +81,368 @@
   const grid = $("#apps-grid");
   SITES.forEach((s) => grid.appendChild(tile(s, "card")));
 
+  // ---- Games (built in; served SAME-ORIGIN by the SW, which fetches the files
+  // from public repos — not proxied, so they don't break). Two sources merged:
+  //   s:"seraph" -> plays at g/games/<slug>/index.html (Seraph via jsDelivr)
+  //   s:"gnmath" -> plays at gm/<file> (gn-math wrapper via raw.githubusercontent)
+  // Thumbnail: g.cover (a gn-math cover id) -> cover/<id>.png; else a Seraph
+  // screenshot; else the title tile (.no-thumb). ----
+  const gamesGrid = $("#games-grid");
+  const gamesFeatured = $("#games-featured");
+  const gamesPopular = $("#games-popular");
+  const featuredWrap = $("#featured-wrap");
+  const popularWrap = $("#popular-wrap");
+  const allHead = $("#all-head");
+  const gamesEmpty = $("#games-empty");
+  const gamePlay = $("#game-play");
+  const gameFrame = $("#game-frame");
+
+  // Curated shelves. FEATURED = the "full games" people sit down and sink time
+  // into (sandbox / RPG / sim), shown as big hero cards (a cover is required so
+  // they look good). POPULAR = the trending quick-play ports. Both are matched to
+  // the catalog by normalized title at load, so a title that isn't present (or,
+  // for featured, has no cover) is simply skipped.
+  const FEATURED = ["Minecraft", "Terraria", "Stardew Valley", "Pokemon Emerald", "Geometry Dash",
+    "Five Nights at Freddy's", "Cuphead", "Plants vs Zombies", "Super Mario 64", "Getting Over It"];
+  const POPULAR = ["Slope", "Subway Surfers", "Moto X3M", "Crossy Road", "Bowmasters", "OvO", "1v1.LOL",
+    "Temple Run 2", "Tunnel Rush", "Stickman Hook", "Jetpack Joyride", "Basket Random", "Run 3",
+    "Snow Rider 3D", "Getaway Shootout", "Rooftop Snipers", "Magic Tiles 3", "Block Blast", "Sprunki",
+    "Idle Breakout", "2048", "Supreme Duelist", "Basketball Stars", "Happy Wheels"];
+  const gnorm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  let gamesLoaded = false;
+  function gameTile(g, variant) {
+    const b = document.createElement("button");
+    b.className = "game-tile" + (variant ? " " + variant : "");
+    b.dataset.title = (g.title || g.slug || "").toLowerCase();
+    const thumb = document.createElement("figure");
+    thumb.className = "thumb";
+    const img = document.createElement("img");
+    img.loading = "lazy";
+    img.alt = "";
+    if (g.cover != null) img.src = "cover/" + g.cover + ".png";          // gn-math pro cover
+    else if (g.slug) img.src = "g/images/thumbnails/" + g.slug + ".jpg"; // Seraph screenshot
+    else b.classList.add("no-thumb");
+    img.onerror = () => b.classList.add("no-thumb");                     // missing/broken -> title tile
+    const play = document.createElement("span");
+    play.className = "play";
+    play.textContent = "▶";
+    const fb = document.createElement("span");                          // shown only when no-thumb
+    fb.className = "fallback";
+    fb.textContent = g.title || g.slug || "";
+    thumb.append(img, play, fb);
+    if (variant === "featured") {
+      const ft = document.createElement("span");
+      ft.className = "feat-title";
+      ft.textContent = g.title || g.slug || "";
+      thumb.append(ft);
+      b.append(thumb);                                                  // title overlaid, no label row
+    } else {
+      const label = document.createElement("span");
+      label.className = "label";
+      label.textContent = g.title || g.slug || "";
+      b.append(thumb, label);
+    }
+    b.addEventListener("click", () => playGame(g));
+    return b;
+  }
+  async function loadGames() {
+    if (gamesLoaded || !gamesGrid) return;
+    gamesLoaded = true;
+    requestPersist();   // keep game saves from being evicted under storage pressure
+    try {
+      const res = await fetch("games.json", { cache: "force-cache" });
+      const games = await res.json();
+      // Build a normalized-title lookup for resolving the curated shelves.
+      const byTitle = new Map();
+      for (const g of games) { const k = gnorm(g.title || g.slug); if (k && !byTitle.has(k)) byTitle.set(k, g); }
+      const resolve = (name) => {
+        const k = gnorm(name);
+        if (byTitle.has(k)) return byTitle.get(k);
+        for (const [tk, g] of byTitle) if (tk.startsWith(k)) return g;  // e.g. "Geometry Dash Lite (REMAKE)"
+        return null;
+      };
+      // Featured row (cover required) + popular row (de-duped against featured).
+      const used = new Set();
+      const featFrag = document.createDocumentFragment();
+      for (const name of FEATURED) {
+        const g = resolve(name);
+        if (!g || g.cover == null) continue;
+        used.add(g); featFrag.appendChild(gameTile(g, "featured"));
+      }
+      const popFrag = document.createDocumentFragment();
+      for (const name of POPULAR) {
+        const g = resolve(name);
+        if (!g || used.has(g)) continue;
+        used.add(g); popFrag.appendChild(gameTile(g, "pop"));
+      }
+      if (gamesFeatured && featFrag.childNodes.length) { gamesFeatured.appendChild(featFrag); featuredWrap.hidden = false; featuredWrap.dataset.has = "1"; }
+      if (gamesPopular && popFrag.childNodes.length) { gamesPopular.appendChild(popFrag); popularWrap.hidden = false; popularWrap.dataset.has = "1"; }
+      // Full library grid (everything — search filters this, so it must hold them all).
+      const frag = document.createDocumentFragment();
+      for (const g of games) frag.appendChild(gameTile(g));
+      gamesGrid.appendChild(frag);
+    } catch (e) {
+      gamesGrid.textContent = "Couldn't load the game list — try again.";
+    }
+  }
+  function playGame(g) {
+    gameFrame.src = g.s === "gnmath"
+      ? "gm/" + g.file                            // gn-math wrapper (same-origin; SW serves it)
+      : "g/games/" + g.slug + "/index.html";      // Seraph game (same-origin; SW serves it)
+    gamePlay.hidden = false;
+  }
+  // ---- Fullscreen: blow the game player up to the whole screen (over the nav
+  // rail), via the Fullscreen API on the player container so the controls stay. ----
+  const gameFullLabel = $("#game-full-label");
+  const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+  function exitFs() { try { (document.exitFullscreen || document.webkitExitFullscreen)?.call(document); } catch (_) {} }
+  function enterFs() { try { (gamePlay.requestFullscreen || gamePlay.webkitRequestFullscreen)?.call(gamePlay); } catch (_) {} }
+  function syncFsLabel() { if (gameFullLabel) gameFullLabel.textContent = fsEl() ? "⛶ Exit full screen" : "⛶ Fullscreen"; }
+  $("#game-full")?.addEventListener("click", () => { fsEl() ? exitFs() : enterFs(); });
+  document.addEventListener("fullscreenchange", syncFsLabel);
+  document.addEventListener("webkitfullscreenchange", syncFsLabel);
+  function closeGame() {
+    if (fsEl()) exitFs();            // drop out of fullscreen before hiding the player
+    gamePlay.hidden = true;
+    gameFrame.src = "about:blank";
+  }
+  $("#game-back")?.addEventListener("click", closeGame);
+
+  // ---- Game saves ----
+  // Games run in same-origin iframes, so their localStorage + IndexedDB live on
+  // THIS origin and already persist between visits. We (1) ask the browser to KEEP
+  // that storage (persist, so it isn't evicted under pressure) and (2) let the
+  // player export/import a backup. The backup is scoped to GAME data only — the
+  // app's own settings ("halcyon:" localStorage keys) and the proxy's cookie jar
+  // ("scramjet*" IndexedDB) are excluded, so a shared backup never leaks browsing.
+  const isAppKey = (k) => !k || k.indexOf("halcyon:") === 0;
+  const isProxyDb = (n) => !n || /scramjet/i.test(n);   // matches "scramjet*" and "__scramjet_controller"
+  const savesNote = $("#saves-note");
+  async function requestPersist() {
+    try {
+      if (!navigator.storage || !navigator.storage.persist) return;
+      const already = navigator.storage.persisted ? await navigator.storage.persisted() : false;
+      if (!already) await navigator.storage.persist();  // best-effort; browser may still grant later
+    } catch (_) {}
+  }
+  // Binary-safe (de)serialization — emulator save-states are ArrayBuffers / typed
+  // arrays / Blobs that JSON can't carry, so we base64 them behind a type tag.
+  const B64 = {
+    enc(buf) { const b = new Uint8Array(buf); let s = ""; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(s); },
+    dec(str) { const s = atob(str); const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return b; },
+  };
+  async function encVal(v) {
+    if (v == null || typeof v !== "object") return v;
+    if (v instanceof ArrayBuffer) return { __b: "ab", d: B64.enc(v) };
+    if (ArrayBuffer.isView(v)) return { __b: "ta", c: v.constructor.name, d: B64.enc(v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength)) };
+    if (v instanceof Blob) return { __b: "blob", t: v.type, d: B64.enc(await v.arrayBuffer()) };
+    if (Array.isArray(v)) { const a = []; for (const x of v) a.push(await encVal(x)); return a; }
+    const o = {}; for (const k of Object.keys(v)) o[k] = await encVal(v[k]); return o;
+  }
+  function decVal(v) {
+    if (v == null || typeof v !== "object") return v;
+    if (v.__b === "ab") return B64.dec(v.d).buffer;
+    if (v.__b === "ta") { const C = self[v.c] || Uint8Array; return new C(B64.dec(v.d).buffer); }
+    if (v.__b === "blob") return new Blob([B64.dec(v.d)], { type: v.t });
+    if (Array.isArray(v)) return v.map(decVal);
+    const o = {}; for (const k of Object.keys(v)) o[k] = decVal(v[k]); return o;
+  }
+  async function dumpGameIDB() {
+    const out = {};
+    let dbs = [];
+    try { dbs = (indexedDB.databases ? await indexedDB.databases() : []) || []; } catch (_) { return out; }
+    for (const info of dbs) {
+      const name = info.name;
+      if (isProxyDb(name)) continue;                         // skip the proxy's cookie jar
+      let db;
+      try { db = await new Promise((res, rej) => { const r = indexedDB.open(name); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); r.onblocked = () => rej(0); }); }
+      catch (_) { continue; }
+      const dump = { version: db.version, stores: {} };
+      for (const sn of Array.from(db.objectStoreNames)) {
+        await new Promise((res) => {
+          let st; try { st = db.transaction(sn, "readonly").objectStore(sn); } catch (_) { return res(); }
+          const meta = { keyPath: st.keyPath, autoIncrement: st.autoIncrement, recs: [] };
+          const kr = st.getAllKeys(), vr = st.getAll();
+          let keys, vals, got = 0;
+          const done = async () => {
+            if (++got < 2) return;
+            for (let i = 0; i < vals.length; i++) meta.recs.push({ k: st.keyPath != null ? undefined : await encVal(keys[i]), v: await encVal(vals[i]) });
+            dump.stores[sn] = meta; res();
+          };
+          kr.onsuccess = () => { keys = kr.result; done(); };
+          vr.onsuccess = () => { vals = vr.result; done(); };
+          kr.onerror = vr.onerror = () => res();
+        });
+      }
+      db.close();
+      out[name] = dump;
+    }
+    return out;
+  }
+  async function restoreGameIDB(data) {
+    for (const name of Object.keys(data)) {
+      if (isProxyDb(name)) continue;
+      const d = data[name];
+      await new Promise((res) => { const dr = indexedDB.deleteDatabase(name); dr.onsuccess = dr.onerror = dr.onblocked = () => res(); });
+      let db;
+      try {
+        db = await new Promise((res, rej) => {
+          const r = indexedDB.open(name, d.version || 1);
+          r.onupgradeneeded = () => { const idb = r.result; for (const sn of Object.keys(d.stores)) { const m = d.stores[sn]; const opts = {}; if (m.keyPath != null) opts.keyPath = m.keyPath; if (m.autoIncrement) opts.autoIncrement = true; try { idb.createObjectStore(sn, opts); } catch (_) {} } };
+          r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+        });
+      } catch (_) { continue; }
+      for (const sn of Object.keys(d.stores)) {
+        const m = d.stores[sn];
+        await new Promise((res) => {
+          let st; try { st = db.transaction(sn, "readwrite").objectStore(sn); } catch (_) { return res(); }
+          for (const rec of m.recs) { try { const val = decVal(rec.v); if (m.keyPath != null) st.put(val); else st.put(val, decVal(rec.k)); } catch (_) {} }
+          st.transaction.oncomplete = () => res(); st.transaction.onerror = () => res();
+        });
+      }
+      db.close();
+    }
+  }
+  function dumpGameLS() { const o = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (!isAppKey(k)) o[k] = localStorage.getItem(k); } return o; }
+  function restoreGameLS(o) { for (const k of Object.keys(o)) { if (isAppKey(k)) continue; try { localStorage.setItem(k, o[k]); } catch (_) {} } }
+  // ---- OPFS: some games (Stardew Valley & other .NET/Unity ports) save to the
+  // Origin Private File System as flat .tar files at the OPFS root, NOT to
+  // localStorage/IndexedDB. Back those up too — but skip the re-downloadable game
+  // content packs (Content.tar / anything very large), only the saves + prefs. ----
+  const opfsSkip = (name, size) => /content/i.test(name) || size > 30 * 1024 * 1024;
+  async function dumpOPFS() {
+    const out = {};
+    try {
+      const root = await navigator.storage.getDirectory();
+      for await (const [name, h] of root.entries()) {
+        if (h.kind !== "file") continue;
+        const f = await h.getFile();
+        if (opfsSkip(name, f.size)) continue;
+        out[name] = B64.enc(await f.arrayBuffer());
+      }
+    } catch (_) {}
+    return out;
+  }
+  async function writeOPFS(name, bytes) {
+    const root = await navigator.storage.getDirectory();
+    const h = await root.getFileHandle(name, { create: true });
+    const w = await h.createWritable(); await w.write(bytes); await w.close();
+  }
+  async function restoreOPFS(obj) {
+    for (const name of Object.keys(obj)) { try { await writeOPFS(name, B64.dec(obj[name]).buffer); } catch (_) {} }
+  }
+
+  // ---- Import a backup from ANOTHER site (e.g. Obsidian) and convert it. Those
+  // are gzipped tarballs; we stream-gunzip and pull out just the game-save parts
+  // (opfs/*.tar saves + data/ls.json localStorage), skipping the huge content
+  // packs. A converted save only resurfaces for a game Halcyon ALSO has in the
+  // same build (Stardew Valley, etc.) — same storage layout, so it just works. ----
+  async function tarExtract(stream, want) {
+    const reader = stream.getReader();
+    let buf = new Uint8Array(0), done = false;
+    const out = {};
+    const octal = (b) => parseInt((new TextDecoder().decode(b).replace(/\0.*$/, "").trim() || "0"), 8) || 0;
+    const push = (c) => { const n = new Uint8Array(buf.length + c.length); n.set(buf); n.set(c, buf.length); buf = n; };
+    const ensure = async (n) => { while (buf.length < n && !done) { const r = await reader.read(); if (r.done) { done = true; break; } push(r.value); } return buf.length >= n; };
+    while (await ensure(512)) {
+      const header = buf.slice(0, 512); buf = buf.slice(512);
+      if (header.every((x) => x === 0)) break;                          // end-of-archive
+      const name = new TextDecoder().decode(header.slice(0, 100)).replace(/\0.*$/, "");
+      const size = octal(header.slice(124, 136));
+      const total = size + ((512 - (size % 512)) % 512);
+      if (want(name)) { await ensure(total); out[name] = buf.slice(0, size); buf = buf.slice(total); }
+      else {                                                            // skip without buffering (Content.tar is ~66MB)
+        let rem = total; const fromBuf = Math.min(rem, buf.length); buf = buf.slice(fromBuf); rem -= fromBuf;
+        while (rem > 0 && !done) { const r = await reader.read(); if (r.done) { done = true; break; } if (r.value.length <= rem) rem -= r.value.length; else { buf = r.value.slice(rem); rem = 0; } }
+      }
+    }
+    try { reader.releaseLock(); } catch (_) {}
+    return out;
+  }
+  async function importForeign(file) {
+    if (!confirm("Import this backup from another site? Matching game saves (e.g. Stardew Valley) will be added to Halcyon; a game you already have a save for will be overwritten.")) return;
+    flashSaves("Importing… this can take a moment for large files.");
+    try {
+      if (!("DecompressionStream" in self)) { flashSaves("This browser can't unpack that file.", false); return; }
+      const stream = file.stream().pipeThrough(new DecompressionStream("gzip"));
+      const want = (n) => (n.startsWith("opfs/") && !/content/i.test(n)) || n === "data/ls.json";
+      const found = await tarExtract(stream, want);
+      let saves = 0;
+      for (const [name, bytes] of Object.entries(found)) {
+        if (name.startsWith("opfs/")) {
+          const base = name.slice(5).replace(/\/.*$/, "");             // flat tar at OPFS root
+          if (base) { await writeOPFS(base, bytes.buffer); if (/save/i.test(base)) saves++; }
+        } else if (name === "data/ls.json") {
+          try { const ls = JSON.parse(new TextDecoder().decode(bytes)); for (const k of Object.keys(ls)) if (!isAppKey(k)) localStorage.setItem(k, ls[k]); } catch (_) {}
+        }
+      }
+      if (!Object.keys(found).length) { flashSaves("No importable game saves found in that file.", false); return; }
+      flashSaves("Imported ✓ — open the game and your save will be under Load.");
+    } catch (e) { flashSaves("Import failed — " + (e && e.message || "try again"), false); }
+  }
+
+  function flashSaves(msg, ok) { if (!savesNote) return; savesNote.textContent = msg; savesNote.classList.toggle("flash", ok !== false); }
+  async function backupSaves(btn) {
+    if (btn) btn.disabled = true;
+    flashSaves("Collecting your saves…");
+    try {
+      const payload = { halcyon: "game-saves", v: 1, when: new Date().toISOString(), origin: location.origin,
+        localStorage: dumpGameLS(), idb: await dumpGameIDB(), opfs: await dumpOPFS() };
+      const url = URL.createObjectURL(new Blob([JSON.stringify(payload)], { type: "application/json" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = "halcyon-game-saves-" + new Date().toISOString().slice(0, 10) + ".json";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      flashSaves("Backup downloaded ✓");
+    } catch (_) { flashSaves("Backup failed — try again.", false); }
+    finally { if (btn) btn.disabled = false; }
+  }
+  async function restoreSaves(file) {
+    // Peek at the first bytes: a gzip magic (1f 8b) means it's another site's
+    // tarball backup (e.g. Obsidian) -> convert it instead of a Halcyon restore.
+    let head;
+    try { head = new Uint8Array(await file.slice(0, 2).arrayBuffer()); } catch { head = new Uint8Array(); }
+    if (head[0] === 0x1f && head[1] === 0x8b) return importForeign(file);
+    let data; try { data = JSON.parse(await file.text()); } catch { flashSaves("That file isn't a valid backup.", false); return; }
+    if (data.halcyon !== "game-saves" && !confirm("This doesn't look like a Halcyon save backup. Restore anyway?")) return;
+    if (!confirm("Restore games from this backup? Saves currently on this device will be overwritten.")) return;
+    flashSaves("Restoring…");
+    try {
+      if (data.localStorage) restoreGameLS(data.localStorage);
+      if (data.idb) await restoreGameIDB(data.idb);
+      if (data.opfs) await restoreOPFS(data.opfs);
+      location.reload();
+    } catch (_) { flashSaves("Restore failed — try again.", false); }
+  }
+  $("#saves-backup")?.addEventListener("click", (e) => backupSaves(e.currentTarget));
+  $("#saves-restore")?.addEventListener("click", () => $("#saves-file")?.click());
+  $("#saves-file")?.addEventListener("change", (e) => { const f = e.target.files && e.target.files[0]; if (f) restoreSaves(f); e.target.value = ""; });
+
+  // Search collapses the curated shelves and filters the full library; empty
+  // query restores the browse layout.
+  $("#games-search")?.addEventListener("input", (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    const browsing = !q;
+    // Show a shelf only while browsing AND it actually has content.
+    if (featuredWrap) featuredWrap.hidden = !browsing || featuredWrap.dataset.has !== "1";
+    if (popularWrap) popularWrap.hidden = !browsing || popularWrap.dataset.has !== "1";
+    if (allHead) allHead.textContent = browsing ? "All games" : "Results";
+    let shown = 0;
+    gamesGrid.querySelectorAll(".game-tile").forEach((t) => {
+      const match = browsing || t.dataset.title.includes(q);
+      t.style.display = match ? "" : "none";
+      if (match) shown++;
+    });
+    if (gamesEmpty) gamesEmpty.hidden = browsing || shown > 0;
+  });
+  // Load the merged catalog (~1,200 games) the first time the Games view is opened.
+  $$('[data-nav="games"]').forEach((el) => el.addEventListener("click", loadGames));
+  // Clicking ANY nav button also exits a running game (the overlay sits above views).
+  $$("[data-nav]").forEach((el) => el.addEventListener("click", () => {
+    if (gamePlay && !gamePlay.hidden) closeGame();
+  }));
+
   // ---- Proxy tabs + launch flow ----
   const loader = $("#frame-loader");
   const tbInput = $("#tb-input");
@@ -572,10 +934,11 @@
         const keys = await caches.keys();
         await Promise.all(keys.map((k) => caches.delete(k)));
       }
-      // IndexedDB — the Scramjet cookie jar + controller state live here.
+      // IndexedDB — the Scramjet cookie jar + controller state live here. Only
+      // wipe those (scramjet*); leave game saves on other DBs intact.
       if (indexedDB.databases) {
         const dbs = await indexedDB.databases();
-        await Promise.all(dbs.map((d) => d.name && indexedDB.deleteDatabase(d.name)));
+        await Promise.all(dbs.map((d) => d.name && /scramjet/i.test(d.name) && indexedDB.deleteDatabase(d.name)));
       }
     } catch (e) {
       console.warn("wipe:", e);

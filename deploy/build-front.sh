@@ -24,7 +24,7 @@ mkdir -p "$OUT/scram"
 
 # App shell (static, served same-origin on the front).
 cp "$ROOT"/public/app.js "$ROOT"/public/proxy.js "$ROOT"/public/style.css \
-   "$ROOT"/public/sw.js "$ROOT"/public/icon.svg "$OUT/"
+   "$ROOT"/public/sw.js "$ROOT"/public/icon.svg "$ROOT"/public/games.json "$OUT/"
 cp -r "$ROOT"/public/assets "$OUT/assets"
 
 # Front gate + shell (shell gets the backend origin substituted in).

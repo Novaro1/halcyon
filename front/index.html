@@ -100,6 +100,10 @@
             <svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg>
             <span class="tip">Apps</span>
           </button>
+          <button class="nav-btn" data-nav="games" title="Games">
+            <svg viewBox="0 0 24 24"><path d="M17 6H7a6 6 0 0 0 0 12 3 3 0 0 0 2.6-1.5l.9-1.5h3l.9 1.5A3 3 0 0 0 17 18a6 6 0 0 0 0-12zM8 9a1 1 0 0 1 1 1v1h1a1 1 0 1 1 0 2H9v1a1 1 0 1 1-2 0v-1H6a1 1 0 1 1 0-2h1v-1a1 1 0 0 1 1-1zm7 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm2 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>
+            <span class="tip">Games</span>
+          </button>
           <button class="nav-btn" data-nav="history" title="History">
             <svg viewBox="0 0 24 24"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
             <span class="tip">History</span>
@@ -166,6 +170,45 @@
             <p>Your favorite corners of the web, one tap away.</p>
           </header>
           <div class="grid" id="apps-grid"></div>
+        </section>
+
+        <!-- GAMES -->
+        <section class="view" data-view="games">
+          <header class="view-head">
+            <h2>Games</h2>
+            <p>Over 1,200 games, built right in. Tap one to play.</p>
+          </header>
+          <input id="games-search" class="games-search" type="text" placeholder="Search 1,200+ games…" autocomplete="off" autocapitalize="off" spellcheck="false" />
+          <div class="games-saves">
+            <span class="games-saves-note" id="saves-note">Your game progress saves automatically on this device.</span>
+            <span class="games-saves-actions">
+              <button class="save-btn" id="saves-backup" type="button">⬇ Back up saves</button>
+              <button class="save-btn" id="saves-restore" type="button">⬆ Restore / Import</button>
+            </span>
+            <input type="file" id="saves-file" accept="application/json,.json,.gz,.tar.gz,application/gzip" hidden />
+          </div>
+          <div class="games-sections">
+            <section class="games-shelf" id="featured-wrap" hidden>
+              <h3 class="shelf-head"><span class="shelf-emoji">✨</span> Featured</h3>
+              <div class="featured-row" id="games-featured"></div>
+            </section>
+            <section class="games-shelf" id="popular-wrap" hidden>
+              <h3 class="shelf-head"><span class="shelf-emoji">🔥</span> Popular right now</h3>
+              <div class="pop-row" id="games-popular"></div>
+            </section>
+            <section class="games-shelf">
+              <h3 class="shelf-head" id="all-head">All games</h3>
+              <div class="grid games-grid" id="games-grid"></div>
+              <p class="games-empty" id="games-empty" hidden>No games match your search.</p>
+            </section>
+          </div>
+          <div class="game-play" id="game-play" hidden>
+            <div class="game-bar">
+              <button class="game-btn" id="game-full" type="button"><span id="game-full-label">⛶ Fullscreen</span></button>
+              <button class="game-btn game-back" id="game-back" type="button">← Games</button>
+            </div>
+            <iframe id="game-frame" title="game" allow="autoplay; fullscreen; gamepad; clipboard-write"></iframe>
+          </div>
         </section>
 
         <!-- SETTINGS -->

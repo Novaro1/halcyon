@@ -10,6 +10,61 @@
 const BASE = self.location.pathname.replace(/\/sw\.js$/, "");
 importScripts(BASE + "/scram/controller.sw.js");
 
+// ---- Games: serve game files SAME-ORIGIN by fetching them from public repos.
+// Extension blockers (what most school devices have) block navigations/iframes,
+// not subresource fetches — so a game iframe only ever points at THIS origin, and
+// the real hosts are merely fetch()ed here, never navigated to. Three routes:
+//   BASE/g/<path>       -> Seraph collection via jsDelivr. Seraph games use relative
+//                          paths, so mirroring the whole repo makes shared engines
+//                          (EmulatorJS/Ruffle/Unity) resolve.
+//   BASE/gm/<file>      -> gn-math wrapper HTML (raw.githubusercontent). Each wrapper
+//                          carries an absolute <base href> to its own game repo, so
+//                          its assets load straight from jsDelivr as subresources.
+//   BASE/cover/<id>.png -> gn-math cover art (raw.githubusercontent).
+// Fires before the Scramjet handler below.
+const SERAPH_SRC   = "https://cdn.jsdelivr.net/gh/pug0806/seraph@main";
+const GNMATH_HTML  = "https://raw.githubusercontent.com/gn-math/html/main";
+const GNMATH_COVER = "https://raw.githubusercontent.com/gn-math/covers/main";
+const G_PREFIX     = BASE + "/g/";
+const GM_PREFIX    = BASE + "/gm/";
+const COVER_PREFIX = BASE + "/cover/";
+const GAMES_MIME = { html:"text/html",htm:"text/html",js:"application/javascript",mjs:"application/javascript",
+  css:"text/css",json:"application/json",png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",gif:"image/gif",
+  svg:"image/svg+xml",webp:"image/webp",ico:"image/x-icon",wasm:"application/wasm",mp3:"audio/mpeg",
+  ogg:"audio/ogg",wav:"audio/wav",woff:"font/woff",woff2:"font/woff2",ttf:"font/ttf",otf:"font/otf",
+  swf:"application/x-shockwave-flash",txt:"text/plain" };
+function gameFetch(src, pathForExt, forceType) {
+  return (async () => {
+    try {
+      const r = await fetch(src, { cache: "force-cache" });
+      const body = await r.arrayBuffer();
+      const ext = (pathForExt.split("?")[0].split(".").pop() || "").toLowerCase();
+      const ct = forceType || GAMES_MIME[ext] || r.headers.get("content-type") || "application/octet-stream";
+      return new Response(body, { status: r.status, headers: { "content-type": ct } });
+    } catch (err) { return new Response("game-fetch-fail: " + err.message, { status: 502 }); }
+  })();
+}
+self.addEventListener("fetch", (event) => {
+  let u;
+  try { u = new URL(event.request.url); } catch { return; }
+  if (u.origin !== self.location.origin) return;
+  const p = u.pathname;
+  if (p.startsWith(G_PREFIX)) {
+    event.stopImmediatePropagation();
+    let path = p.slice(G_PREFIX.length);
+    if (path === "" || path.endsWith("/")) path += "index.html";
+    event.respondWith(gameFetch(SERAPH_SRC + "/" + path, path));
+  } else if (p.startsWith(GM_PREFIX)) {
+    event.stopImmediatePropagation();
+    const file = p.slice(GM_PREFIX.length).replace(/[^\w.-]/g, "");   // our own trusted filename, sanitized
+    event.respondWith(gameFetch(GNMATH_HTML + "/" + file, "x.html", "text/html"));
+  } else if (p.startsWith(COVER_PREFIX)) {
+    event.stopImmediatePropagation();
+    const id = p.slice(COVER_PREFIX.length).replace(/\.png$/, "").replace(/[^0-9]/g, "");
+    event.respondWith(gameFetch(GNMATH_COVER + "/" + id + ".png", "x.png", "image/png"));
+  }
+});
+
 let ADBLOCK = true;
 let blockedCount = 0;
 const BLOCK = new Set([
