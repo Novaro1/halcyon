@@ -799,7 +799,9 @@ kbd {
 .games-shelf { margin:0 0 30px; }
 .games-shelf[hidden] { display:none; }
 .shelf-head { font-size:15px; font-weight:800; letter-spacing:.01em; margin:0 0 13px; opacity:.95; display:flex; align-items:center; gap:7px; }
-.shelf-emoji { font-size:15px; }
+/* Emojis live in CSS (not DOM text) so the mirror cloak's text-masking can't mangle them. */
+.shelf-featured::before { content:"✨ "; }
+.shelf-popular::before { content:"🔥 "; }
 
 /* horizontal scroller rows */
 .featured-row, .pop-row { display:flex; gap:15px; overflow-x:auto; overflow-y:hidden; padding:4px 2px 14px;
